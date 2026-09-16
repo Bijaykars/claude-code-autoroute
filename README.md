@@ -78,7 +78,7 @@ Under that split the delegated work costs about a quarter of the all-top-model p
 
 ## Status and honesty
 
-- Running on one project since 2026-09-14. The ledgers have a handful of rows. No token saving beyond the table above has been measured.
+- Running on one project since 2026-09-14. The ledgers have a handful of rows. No token saving has been measured yet; the cost table above is illustrative.
 - The retune thresholds are starting heuristics, and the file says so.
 - Agents only write their ledger row if the instruction is explicit and includes the path. The first version did not include the path and nothing was logged.
 
