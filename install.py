@@ -2,8 +2,9 @@
 """Install (or uninstall) AutoRoute's agents, hooks, CLAUDE.md section 0 and
 settings.json hook wiring into ~/.claude. Stdlib only, Python 3.9+.
 
-    python install.py            # install
-    python install.py --dry-run  # show what would happen, change nothing
+    python install.py                    # install (routing block only, on a fresh CLAUDE.md)
+    python install.py --full-claude-md   # fresh install writes the whole CLAUDE.md instead
+    python install.py --dry-run          # show what would happen, change nothing
     python install.py --uninstall
 """
 import argparse
@@ -97,16 +98,28 @@ def extract_section0(text):
         raise SystemExit("CLAUDE.md: could not find '## 0. Cost routing' section")
     if end is None:
         end = len(lines)
-    return "".join(lines[start:end]).rstrip("\n") + "\n"
+    # The source CLAUDE.md wraps section 0 in its own autoroute markers; strip
+    # them here so callers can wrap the extracted text in fresh markers
+    # without ending up with a duplicated MARK_END.
+    body = [l for l in lines[start:end] if l.strip() not in (MARK_START, MARK_END)]
+    return "".join(body).rstrip("\n") + "\n"
 
 
-def install_claude_md(dry_run, log):
+def install_claude_md(dry_run, log, full_claude_md):
     dst = HOME_CLAUDE / "CLAUDE.md"
     if not dst.exists():
-        log.append(f"copy CLAUDE.md -> {dst} (new file, full copy)")
-        if not dry_run:
-            HOME_CLAUDE.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(CLAUDE_MD_SRC, dst)
+        if full_claude_md:
+            log.append(f"copy CLAUDE.md -> {dst} (new file, full copy, --full-claude-md)")
+            if not dry_run:
+                HOME_CLAUDE.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(CLAUDE_MD_SRC, dst)
+        else:
+            section0 = extract_section0(CLAUDE_MD_SRC.read_text(encoding="utf-8"))
+            block = f"{MARK_START}\n{section0}{MARK_END}\n"
+            log.append(f"write CLAUDE.md -> {dst} (new file, routing block only)")
+            if not dry_run:
+                HOME_CLAUDE.mkdir(parents=True, exist_ok=True)
+                dst.write_text(block, encoding="utf-8")
         return
 
     section0 = extract_section0(CLAUDE_MD_SRC.read_text(encoding="utf-8"))
@@ -130,9 +143,19 @@ def uninstall_claude_md(dry_run, log):
         return
     text = dst.read_text(encoding="utf-8")
     if BLOCK_RE.search(text):
-        log.append(f"remove autoroute block from {dst}")
-        if not dry_run:
-            dst.write_text(BLOCK_RE.sub("", text), encoding="utf-8")
+        remainder = BLOCK_RE.sub("", text)
+        bak = newest_backup(dst)
+        if not bak and not remainder.strip():
+            # Fresh routing-block-only install: nothing existed before it and
+            # nothing but the block remains, so remove the file rather than
+            # leaving an empty CLAUDE.md.
+            log.append(f"remove {dst} (fresh install, no prior file existed)")
+            if not dry_run:
+                dst.unlink()
+        else:
+            log.append(f"remove autoroute block from {dst}")
+            if not dry_run:
+                dst.write_text(remainder, encoding="utf-8")
     else:
         # No marker: either untouched by us, or it was a fresh full-copy install.
         bak = newest_backup(dst)
@@ -212,6 +235,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--uninstall", action="store_true", help="remove what install.py added")
     ap.add_argument("--dry-run", action="store_true", help="print actions, change nothing")
+    ap.add_argument(
+        "--full-claude-md",
+        action="store_true",
+        help="on a fresh install with no existing ~/.claude/CLAUDE.md, write the "
+        "complete CLAUDE.md (routing plus the coding-philosophy sections) "
+        "instead of just the routing block",
+    )
     args = ap.parse_args()
 
     log = []
@@ -224,7 +254,7 @@ def main():
     else:
         copy_files(AGENTS_SRC, HOME_CLAUDE / "agents", args.dry_run, log)
         copy_files(HOOKS_SRC, HOME_CLAUDE / "hooks", args.dry_run, log)
-        install_claude_md(args.dry_run, log)
+        install_claude_md(args.dry_run, log, args.full_claude_md)
         install_settings(args.dry_run, log)
         title = "AutoRoute install"
 

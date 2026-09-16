@@ -2,62 +2,32 @@
 
 Cost-aware subagent routing for Claude Code, with failure tracking and experimental self-tuning.
 
-Let cheaper models handle routine work, and escalate when they struggle.
+Running everything on the top model means it also does your file searches, log reads and boilerplate; hand-written routing rules go stale, and nothing tells you when a cheap model was quietly wrong. AutoRoute lets cheaper models handle routine work, and escalates when they struggle.
 
-## The problem
-
-If you run Claude Code on the most capable model, that model also does your file searches, reads your logs, writes your boilerplate and runs your tests. Those tasks do not need it. Subagents can run on cheaper models, but hand-written routing rules go stale, and nothing tells you when a cheap model has been quietly giving wrong answers.
-
-## What AutoRoute does
+## What it does
 
 - **Routes by tier.** The session reads which model it is and hands work down: Haiku finds and reads, Sonnet implements, tests and reviews, Opus does UI, the top model only decides.
 - **Escalates one rung at a time.** An agent that cannot deliver returns a fixed `ESCALATE` block naming the next rung. Nothing jumps straight to the top model.
-- **Records failures.** Every agent logs a ledger row. When a delegated answer proves wrong, the caller logs a `WRONG` row. Silence would otherwise read as success.
-- **Tunes itself, and reverts.** A `retune` agent moves tiers one rung at a time from those ledgers, then checks its own last move against its baseline and reverts it if the next window did not improve.
+- **Records failures.** Every agent logs a ledger row, and the caller logs a `WRONG` row when a delegated answer proves wrong.
+- **Tunes itself, and reverts.** A `retune` agent moves tiers one rung at a time from those ledgers, then verifies its own last move against its baseline.
+
+AutoRoute records task outcomes and can adjust model choices over time. Its experimental tuning process can reverse changes that do not improve results.
 
 ## Quick install
 
 ```bash
 git clone https://github.com/Bijaykars/claude-code-autoroute
 cd claude-code-autoroute
-python install.py            # --dry-run to preview, --uninstall to remove
+python install.py            # Python 3.9+ on PATH
 ```
 
-`install.py` (stdlib only, Python 3.9+) copies the agents and hooks into `~/.claude/`, merges the
-three hook entries into `~/.claude/settings.json`, and installs `CLAUDE.md`: a full copy if you have
-none yet, or just section 0 ("Cost routing") appended inside `<!-- autoroute:start -->` /
-`<!-- autoroute:end -->` markers if you already have your own — your other rules are never touched.
-It backs up anything it would overwrite to `<file>.bak-<timestamp>` first, and `--uninstall` restores
-those backups.
+Restart Claude Code.
+`python install.py --dry-run` previews the changes; `--uninstall` removes them.
 
-Then install the [Ponytail plugin](https://github.com/DietrichGebert/ponytail) from its own repo and
-start a new session. Ledgers appear under `.claude/agent-memory/<agent>/` in each project as agents
-run; git-ignore that path if you do not want them committed.
+By default this installs only the routing block, agents and hooks; your existing `CLAUDE.md` and coding preferences are kept. `--full-claude-md` also installs the coding rules. Details, manual steps and what gets backed up: [docs/install.md](docs/install.md).
+Optional companion: the [Ponytail](https://github.com/DietrichGebert/ponytail) plugin for a minimal-code discipline; AutoRoute does not require it.
 
-Prefer to do it by hand? The manual equivalent:
-
-```bash
-cp agents/*.md ~/.claude/agents/
-mkdir -p ~/.claude/hooks && cp hooks/*.py ~/.claude/hooks/
-# then merge settings.example.json into ~/.claude/settings.json,
-# and merge CLAUDE.md's section 0 into your own CLAUDE.md by hand
-```
-
-## One real task
-
-A nightly job wrote ranks `1, 2, 3, 5` and a test that asserts contiguous ranks failed. Cause unknown.
-
-1. The session (top model) did not open the file. It briefed `deep-debug`, which runs on Sonnet.
-2. `deep-debug` queried the table read-only, read the writer, and found the rank was assigned from the array index before a minimum-history filter dropped a freshly listed name. It replaced the index with a per-side counter that only advances on rows actually written, re-ran the single test, then the suite.
-3. It returned the mechanism with file and line, the fix, and a green test count. It appended `| date | rank gap in nightly writer | resolved | sonnet |` to its ledger.
-
-No Opus or top-model tokens were spent on the investigation. Had Sonnet been stuck, the reply would have been an `ESCALATE` block with the ruled-out list attached, and the same agent would have been re-run on Opus from that list rather than from zero.
-
-## When not to delegate
-
-Starting an agent has overhead. A one-line edit in a file already open, or a single grep, is faster inline, and Anthropic's own guidance says quick, targeted changes suit the main conversation. `CLAUDE.md` says the same. The `inline-counter.py` hook nudges after four consecutive inline tool calls by default; raise `DELEGATE_TRIPWIRE` in your settings `env` block if that is too eager for your work.
-
-## The routing table
+## How it routes
 
 | you are | do yourself | hand off |
 |---|---|---|
@@ -65,32 +35,20 @@ Starting an agent has overhead. A one-line edit in a file already open, or a sin
 | Sonnet | the above plus well-specified implementation | searching, long reads, boilerplate |
 | Haiku | find and read only | never writes code |
 
-Two rules that came from evidence rather than taste:
+Small, self-contained tasks with complete context stay in the main session; starting an agent has overhead.
 
-- **UI design and layout work runs on Opus.** Anything needing visual judgment: new components, layout, theming, unfamiliar interfaces. A label change or a one-line frontend fix with complete context stays inline or goes to `scaffold`. Evidence: Design Arena website Elo on 2026-09-10, Opus 5 1320, Fable 5.1 1321, Sonnet 5 1289, Haiku 4.5 1135 (third-party mirror of the leaderboard); in September 2026 build-offs Sonnet was described as "consistently third-best and occasionally careless". Opus ties the top model at half the price.
-- **Haiku never edits code.** The one exception is a brief that names the file, the exact old text and the exact new text.
+| shape | route |
+|---|---|
+| one small change with complete context | finish in the current session |
+| file discovery or factual extraction | `locate` / `digest` |
+| clearly specified implementation | `implement` / `scaffold` |
+| ambiguous design or hard debugging | opus (via `model: opus`) |
 
-## The escalation contract
+See [docs/escalation.md](docs/escalation.md) for the escalation contract and [docs/self-tuning.md](docs/self-tuning.md) for the ledger, thresholds and rollback.
 
-Every agent that cannot deliver returns exactly this and nothing else:
+## Cost
 
-```
-ESCALATE: <one line — why this tier cannot answer it>
-TRIED: <what you actually covered>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
-```
-
-The caller re-dispatches to the rung named and no higher. Rescope first, then effort up at the same model, then the next model at medium effort.
-
-## The self-tuning loop
-
-1. Every agent appends one row to its ledger after each run: `| date | task shape | resolved or escalated | model used |` in `.claude/agent-memory/<agent>/MEMORY.md`.
-2. When a delegated result proves wrong (a test fails, a root cause is disproven, an edit has to be redone), the caller appends `| date | task shape | WRONG | model | why |`.
-3. `retune-due.py` fires at session start when an agent has ten or more rows since its last marker.
-4. `retune` computes `fail_rate = (escalated + WRONG) / rows`. Promote one rung at `>= 0.40` over ten rows, demote one rung at `<= 0.05` over twenty. Never two rungs. Never below Sonnet for an agent that can write code. It edits the agent file where it is actually installed: `~/.claude/agents/<name>.md` by default, or the project's `.claude/agents/<name>.md` when a project-level copy overrides it.
-5. Every move writes a marker with its baseline. On the next run retune checks the move first: a promotion that did not cut the fail rate by at least 0.10 is reverted and flagged as "not a tier problem". A demotion that pushed the fail rate above 0.40 is reverted.
-
-## Cost, in theory
+### Cost, in theory
 
 List prices per million tokens from the Claude API docs (2026-09-14): Fable 5.1 $10 in / $50 out, Opus 5 $5 / $25, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $9 / $3.60 / $1.80 per million, so Opus is half of Fable, Sonnet a fifth, Haiku a tenth.
 
@@ -128,23 +86,24 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 
 | path | what it is |
 |---|---|
-| `CLAUDE.md` | Global rules: cost routing (know your own tier), token discipline, Karpathy-style "think before coding", the Ponytail ladder, surgical changes, goal-driven execution |
-| `agents/locate.md`, `agents/digest.md` | Haiku. Find and read only. Never write code. |
-| `agents/scaffold.md`, `agents/implement.md`, `agents/test-writer.md`, `agents/reviewer.md` | Sonnet. Mechanical edits, specified implementation, tests, review. |
-| `agents/deep-debug.md` | Sonnet first; escalates itself to Opus only after a reproduction attempt and a ruled-out list. |
-| `agents/retune.md` | Reads every agent's ledger and moves tiers one rung at a time, then verifies or reverts its own last move. |
-| `hooks/retune-due.py` | SessionStart. Counts ledger rows since each agent's last retune marker and says when retune has enough data. |
-| `hooks/prompt-nudge.py` | UserPromptSubmit. Re-asserts "you plan and judge, agents read, search, edit, test" so the rule survives long sessions and compaction. |
+| `CLAUDE.md` | Global rules: cost routing, token discipline, think-before-coding, the ladder, surgical changes, goal-driven execution |
+| `agents/locate.md`, `agents/digest.md` | Haiku. Find and read only. |
+| `agents/scaffold.md`, `agents/implement.md`, `agents/test-writer.md`, `agents/reviewer.md` | Sonnet. Mechanical edits, implementation, tests, review. |
+| `agents/deep-debug.md` | Sonnet first; escalates itself to Opus after a reproduction attempt. |
+| `agents/retune.md` | Re-tiers agents from their ledgers, then verifies or reverts its own last move. |
+| `hooks/retune-due.py` | SessionStart. Flags when an agent has enough ledger rows to retune. |
+| `hooks/prompt-nudge.py` | UserPromptSubmit. Re-asserts the routing rule each turn. |
 | `hooks/inline-counter.py` | PostToolUse. Nudges after N consecutive inline tool calls without delegating. |
 | `settings.example.json` | The hook wiring. |
-| `install.py` | Installer and uninstaller: backs up, merges a marked block into an existing `CLAUDE.md`, merges hooks into settings. `--dry-run`, `--uninstall`. |
-| `tests/test_hooks.py` | Subprocess tests for the three hooks. `python -m unittest tests/test_hooks.py` |
+| `install.py` | Installer and uninstaller. `--dry-run`, `--uninstall`, `--full-claude-md`. |
+| `tests/test_hooks.py` | Subprocess tests for the three hooks. |
+| `docs/` | Install steps, the escalation contract, the self-tuning loop. |
 
-## Status and honesty
+## Status
 
-- Running on one project since 2026-09-14. The ledgers have a handful of rows. One working day has been measured (table above); the illustrative split is theory. Neither is a benchmark.
-- The retune thresholds are starting heuristics, and the file says so.
-- Agents only write their ledger row if the instruction is explicit and includes the path. The first version did not include the path and nothing was logged.
+- Running on one project since 2026-09-14; the ledgers have a handful of rows, and one working day has been measured — neither is a benchmark.
+- The retune thresholds are starting heuristics, and the file that defines them says so.
+- Agents only write their ledger row if the instruction is explicit and includes the path.
 
 ## Roadmap
 
@@ -156,9 +115,8 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 
 ## Credits
 
-- The "think before coding, simplicity first, surgical changes, goal-driven execution" sections paraphrase [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills), a community distillation of Andrej Karpathy's talk on working with coding agents. Not affiliated with him.
-- The ladder paraphrases [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail). Install the plugin for the full behaviour.
-- The routing, escalation contract, ledgers, retune loop and hooks are this repo's own.
+The "think before coding / simplicity first / surgical changes / goal-driven execution" sections of the full `CLAUDE.md` adapt [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) (a community distillation, not affiliated with Andrej Karpathy). The ladder paraphrases [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail).
+The routing, escalation contract, ledgers, retune loop and hooks are this repo's own.
 
 ## License
 
