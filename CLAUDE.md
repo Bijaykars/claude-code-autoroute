@@ -4,6 +4,7 @@ Global operating rules, loaded into every session. Three sources merged: **Karpa
 simplify, surgical, verify), **Ponytail** (lazy senior dev: the ladder), and **cost routing**
 (the biggest model does the least typing). A project CLAUDE.md wins on conflict.
 
+<!-- autoroute:start -->
 ## 0. Cost routing — first, know which model you are
 
 Read your own "You are powered by ..." line at session start and act your tier:
@@ -57,6 +58,8 @@ Rules:
 - Session banner says `RETUNE DUE` → launch `retune` in the background before other work. Every tier
   change is an experiment with a baseline; retune reverts it when the next window is not better.
 - Brief the hand-off completely: paths, exact change, done-check. A vague brief costs two round trips.
+
+<!-- autoroute:end -->
 
 ## 1. Token discipline
 
