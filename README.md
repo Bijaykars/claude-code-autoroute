@@ -93,6 +93,23 @@ The saving depends entirely on how much of a session is lookup and mechanical wo
 
 Under that split the delegated work costs about a quarter of the all-top-model price. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model. Subscription usage is a different accounting from API cost; keep them separate.
 
+### Cost, measured on one working day
+
+One session on the author's own project (a Node/Express trading-signals codebase with a vanilla-JS frontend), 2026-09-14, using the token counts each subagent reported on completion. Twenty-two delegated tasks: repo searches, log digests, a root-cause bug fix, a new UI tab, a code review, two research batteries, a theme pass, a web research task.
+
+| tier | tokens | blended $/M (80% in, 20% out) | cost |
+|---|---|---|---|
+| Haiku 4.5 (locate, digest) | 462k | 1.80 | $0.83 |
+| Sonnet 5 (implement, review, debug, research scripts) | 1,725k | 3.60 | $6.21 |
+| Opus 5 (UI work) | 275k | 9.00 | $2.48 |
+| Fable 5.1 (web research, docs lookup) | 211k | 18.00 | $3.80 |
+| **routed total** | **2,673k** | | **$13.32** |
+| same tokens, all on Fable 5.1 | 2,673k | 18.00 | $48.12 |
+
+The delegated work cost 28% of what the same tokens would have cost on the top model. The split that day was 17% Haiku, 65% Sonnet, 10% Opus, 8% Fable by tokens, so it was heavier on Sonnet than the illustrative split above and lighter on lookups.
+
+What it excludes: the orchestrating session's own tokens (the part the top model was actually paid for), prompt-cache discounts, retries, and the possibility that a stronger model would have finished some tasks in fewer tokens. One day, one project, one operator. It is the order of magnitude, not a benchmark; the reproducible comparison is on the roadmap.
+
 ## What is inside
 
 | path | what it is |
@@ -109,7 +126,7 @@ Under that split the delegated work costs about a quarter of the all-top-model p
 
 ## Status and honesty
 
-- Running on one project since 2026-09-14. The ledgers have a handful of rows. No token saving has been measured yet; the cost table above is illustrative.
+- Running on one project since 2026-09-14. The ledgers have a handful of rows. One working day has been measured (table above); the illustrative split is theory. Neither is a benchmark.
 - The retune thresholds are starting heuristics, and the file says so.
 - Agents only write their ledger row if the instruction is explicit and includes the path. The first version did not include the path and nothing was logged.
 
