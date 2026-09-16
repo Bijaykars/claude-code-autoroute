@@ -96,6 +96,10 @@ the newest `## Retune` marker — never re-count the rows that earned the first 
 Move **down** one rung when `fail_rate <= 0.05` over `N >= 20`, **and** the
 ledger records no correctness incident for that agent.
 
+**No-change runs still write a marker.** When no rule fires, append
+`## Retune <date> — NO CHANGE · window N=<n> F=<f> rate=<r>` at the end of that agent's ledger, followed by a
+fresh table header, so the rows are consumed and `retune-due` does not raise the same window again next session.
+
 ## Never demote
 
 - Any agent with Write or Edit in its tools below `sonnet / low` — owner rule 2026-09-14: haiku finds and reads,
