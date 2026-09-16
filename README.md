@@ -67,7 +67,7 @@ Starting an agent has overhead. A one-line edit in a file already open, or a sin
 
 Two rules that came from evidence rather than taste:
 
-- **Frontend, UI and design work runs on Opus.** Design Arena website Elo on 2026-09-10: Opus 5 1320, Fable 5.1 1321, Sonnet 5 1289, Haiku 4.5 1135 (third-party mirror of the leaderboard). In September 2026 build-offs Sonnet was described as "consistently third-best and occasionally careless". Opus ties the top model at half the price.
+- **UI design and layout work runs on Opus.** Anything needing visual judgment: new components, layout, theming, unfamiliar interfaces. A label change or a one-line frontend fix with complete context stays inline or goes to `scaffold`. Evidence: Design Arena website Elo on 2026-09-10, Opus 5 1320, Fable 5.1 1321, Sonnet 5 1289, Haiku 4.5 1135 (third-party mirror of the leaderboard); in September 2026 build-offs Sonnet was described as "consistently third-best and occasionally careless". Opus ties the top model at half the price.
 - **Haiku never edits code.** The one exception is a brief that names the file, the exact old text and the exact new text.
 
 ## The escalation contract
@@ -137,6 +137,8 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 | `hooks/prompt-nudge.py` | UserPromptSubmit. Re-asserts "you plan and judge, agents read, search, edit, test" so the rule survives long sessions and compaction. |
 | `hooks/inline-counter.py` | PostToolUse. Nudges after N consecutive inline tool calls without delegating. |
 | `settings.example.json` | The hook wiring. |
+| `install.py` | Installer and uninstaller: backs up, merges a marked block into an existing `CLAUDE.md`, merges hooks into settings. `--dry-run`, `--uninstall`. |
+| `tests/test_hooks.py` | Subprocess tests for the three hooks. `python -m unittest tests/test_hooks.py` |
 
 ## Status and honesty
 
