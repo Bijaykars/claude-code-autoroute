@@ -13,7 +13,7 @@ Running everything on the top model means it also does your file searches, log r
 - **Records failures.** Every agent logs a ledger row, and the caller logs a `WRONG` row when a delegated answer proves wrong.
 - **Tunes itself, and reverts.** A `retune` agent moves tiers one rung at a time from those ledgers, then verifies its own last move against its baseline.
 
-AutoRoute records task outcomes and can adjust model choices over time. Its experimental tuning process can reverse changes that do not improve results.
+AutoRoute observes what gets delegated, tracks escalations and known wrong answers, adjusts model tiers from that evidence, and checks whether its own routing changes actually improved things.
 
 ## Quick install
 
@@ -122,6 +122,8 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 ## Roadmap
 
 Done in 0.3: plugin packaging (`docs/plugin.md`, experimental), the hook-captured ledger (`hooks/ledger.py`), and `python autoroute.py status | stats | why | wrong | off | on | mark-retune`.
+
+"Learns what works" is a v0.4 claim, once correctness signals come from tests/lint/build instead of only a human `wrong`/`ok` call; today AutoRoute observes what gets delegated and tracks escalations and known wrong answers.
 
 - **v0.4**: `/autoroute redo` — re-run the last delegation one rung up automatically; correctness signals sourced from tests/lint/build instead of only a human `wrong`/`ok` call; task-shape tagging on ledger rows.
 - **v0.5**: cost-to-success routing by task shape, once every model cell for an agent reaches N ≥ 10 — with the caveat that escalated samples are selection-biased (Opus only ever sees the tasks Sonnet already failed), so adjacent tiers must be compared on matched task shapes, not raw success rates.

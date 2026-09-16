@@ -1,6 +1,6 @@
 {
   "name": "autoroute",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Claude Code model routing built on Claude Code subagents, spreading work across Haiku, Sonnet, and Opus with failure tracking and experimental self-tuning.",
   "author": {
     "name": "Bijaykars"

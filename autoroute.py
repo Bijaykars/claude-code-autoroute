@@ -102,7 +102,11 @@ def runs(rows):
     return [r for r in rows if r.get("type") == "run"]
 
 
-def is_success(r, wrongset):
+def is_non_escalated(r, wrongset):
+    """True iff the subagent did not escalate and was not later marked wrong.
+    This is a proxy for "did not fail loudly", NOT a correctness signal --
+    printed as `non-escalated%`, never as `success%`. See `verified_counts`
+    for the actual correctness signal (explicit `ok`/`wrong` calls)."""
     return r.get("outcome") == "resolved" and r.get("agent_id") not in wrongset
 
 
@@ -131,6 +135,38 @@ def verified_counts(subset, wrongset, okset):
         else:
             u += 1
     return t, f, u
+
+
+def verified_line(subset, wrongset, okset):
+    """One printable line: verified success% computed ONLY over rows with an
+    explicit verified true/false (an `ok`/`wrong` call against that run's
+    agent_id) -- 'resolved' alone is not evidence of correctness."""
+    vt, vf, vu = verified_counts(subset, wrongset, okset)
+    n_verified = vt + vf
+    if n_verified == 0:
+        return "  verified: none yet -- use `autoroute ok|wrong`"
+    rate = vt / n_verified * 100
+    return (
+        f"  verified: true={vt} false={vf} unknown={vu} "
+        f"verified success%={rate:.0f}% (n_verified={n_verified}) "
+        "('resolved' means the subagent did not escalate, not that it was correct)"
+    )
+
+
+def verified_cell(subset, wrongset, okset):
+    """(n_verified, success_rate|None, mean_tokens|None) computed ONLY from
+    rows with an explicit verified true/false -- the basis for any expected-
+    cost figure, never the non-escalated proxy."""
+    verified_rows = [r for r in subset if effective_verified(r, wrongset, okset) is not None]
+    n_verified = len(verified_rows)
+    if n_verified == 0:
+        return 0, None, None
+    t = sum(1 for r in verified_rows if effective_verified(r, wrongset, okset) is True)
+    success_rate = t / n_verified
+    toks = [token_total(r) for r in verified_rows]
+    toks = [x for x in toks if x is not None]
+    mean_tokens = (sum(toks) / len(toks)) if toks else None
+    return n_verified, success_rate, mean_tokens
 
 
 def load_agent_frontmatter(agent_type, cwd):
@@ -226,11 +262,11 @@ def cmd_stats(args, cwd):
             groups.setdefault(key, []).append(r)
             if r.get("model"):
                 raw_ids.setdefault(tier, set()).add(r["model"])
-        print(f"  {'agent':<16}{'tier':<10}{'runs':>6}{'success%':>10}{'escalated':>11}{'wrong':>7}{'median_s':>10}{'tokens':>12}")
+        print(f"  {'agent':<16}{'tier':<10}{'runs':>6}{'non-escalated%':>16}{'escalated':>11}{'wrong':>7}{'median_s':>10}{'tokens':>12}")
         for (agent, tier) in sorted(groups):
             g = groups[(agent, tier)]
             n = len(g)
-            succ = sum(1 for r in g if is_success(r, wset))
+            non_esc = sum(1 for r in g if is_non_escalated(r, wset))
             esc = sum(1 for r in g if r.get("outcome") == "escalated")
             wr = sum(1 for r in g if r.get("agent_id") in wset)
             durs = [r["duration_s"] for r in g if isinstance(r.get("duration_s"), (int, float))]
@@ -238,13 +274,11 @@ def cmd_stats(args, cwd):
             toks = [token_total(r) for r in g]
             toks = [t for t in toks if t is not None]
             tot_tok = sum(toks) if toks else 0
-            print(f"  {agent:<16}{tier:<10}{n:>6}{(succ / n * 100):>9.0f}%{esc:>11}{wr:>7}{med:>10}{tot_tok:>12}")
+            print(f"  {agent:<16}{tier:<10}{n:>6}{(non_esc / n * 100):>15.0f}%{esc:>11}{wr:>7}{med:>10}{tot_tok:>12}")
         if raw_ids:
             ids_line = "; ".join(f"{tier}={','.join(sorted(ids))}" for tier, ids in sorted(raw_ids.items()))
             print(f"  raw model ids: {ids_line}")
-        vt, vf, vu = verified_counts(subset, wset, okset)
-        print(f"  verified: true={vt} false={vf} unknown={vu} "
-              f"('resolved' means the subagent did not escalate, not that it was correct)")
+        print(verified_line(subset, wset, okset))
 
     table(all_runs, "All time")
     recent = [r for r in all_runs if isinstance(r.get("ts"), (int, float)) and r["ts"] >= now - 30 * DAY]
@@ -272,8 +306,9 @@ def cmd_why(args, cwd):
         print(f"\n{label} (this project):")
         if not groups:
             print("  (no runs)")
-            return {}
+            return {}, {}
         result = {}
+        vcells = {}
         raw_ids = {}
         for tier in sorted(groups):
             g = groups[tier]
@@ -281,51 +316,56 @@ def cmd_why(args, cwd):
             for r in g:
                 if r.get("model"):
                     raw_ids.setdefault(tier, set()).add(r["model"])
+            vcells[tier] = verified_cell(g, wset, okset)
             if n < 10:
                 print(f"  {tier}: insufficient data (N={n}) -- default tier applies")
                 result[tier] = None
                 continue
-            succ = sum(1 for r in g if is_success(r, wset)) / n * 100
-            print(f"  {tier}: N={n} success={succ:.0f}%")
-            toks = [token_total(r) for r in g]
-            toks = [t for t in toks if t is not None]
-            mean_tok = (sum(toks) / len(toks)) if toks else None
-            success_rate = succ / 100.0
-            result[tier] = {"n": n, "success_rate": success_rate, "mean_tokens": mean_tok}
+            non_esc = sum(1 for r in g if is_non_escalated(r, wset)) / n * 100
+            print(f"  {tier}: N={n} non-escalated={non_esc:.0f}%")
+            result[tier] = {"n": n}
         if raw_ids:
             ids_line = "; ".join(f"{tier}={','.join(sorted(ids))}" for tier, ids in sorted(raw_ids.items()))
             print(f"  raw model ids: {ids_line}")
-        vt, vf, vu = verified_counts([r for g in groups.values() for r in g], wset, okset)
-        print(f"  verified: true={vt} false={vf} unknown={vu} "
-              f"('resolved' means the subagent did not escalate, not that it was correct)")
-        return result
+        print(verified_line([r for g in groups.values() for r in g], wset, okset))
+        return result, vcells
 
-    base_cells = print_cells(cells_for(all_runs), "Per-model record")
+    base_cells, base_verified = print_cells(cells_for(all_runs), "Per-model record")
 
-    matched_cells = None
+    matched_verified = None
     if words:
         wl = [w.lower() for w in words]
         matched = [r for r in all_runs if r.get("task") and any(w in r["task"].lower() for w in wl)]
-        matched_cells = print_cells(cells_for(matched), f"Matching task words {words}")
+        _, matched_verified = print_cells(cells_for(matched), f"Matching task words {words}")
 
     print(
-        "\nObjective: lowest expected cost to a successful completion, including "
-        "retries -- computed only when every cell has N >= 10."
+        "\nObjective: lowest expected cost to a verified successful completion, including "
+        "retries -- computed only when every tier being compared has >= 10 verified "
+        "(`autoroute ok`/`wrong`) runs. Never derived from the non-escalated proxy."
     )
 
-    considered = list(base_cells.values()) + (list(matched_cells.values()) if matched_cells is not None else [])
-    if considered and all(c is not None for c in considered):
-        print("Expected cost per tier (blended $/M x mean tokens / success rate):")
-        for label, groups in (("base", base_cells), ("task-filtered", matched_cells or {})):
-            for tier, c in groups.items():
-                if c is None:
-                    continue
-                rate = BLENDED_PER_M.get(tier)
-                if rate is None or c["mean_tokens"] is None or c["success_rate"] <= 0:
-                    print(f"  [{label}] {tier}: no token data")
-                    continue
-                cost = rate * (c["mean_tokens"] / 1_000_000) / c["success_rate"]
-                print(f"  [{label}] {tier}: ${cost:.4f} expected per successful run")
+    considered = [("base", tier, cell) for tier, cell in base_verified.items()]
+    if matched_verified is not None:
+        considered += [("task-filtered", tier, cell) for tier, cell in matched_verified.items()]
+
+    if considered and all(nv >= 10 for (_, _, (nv, _, _)) in considered):
+        print("Expected cost per tier (blended $/M x mean tokens / verified success rate), verified rows only:")
+        for label, tier, (nv, success_rate, mean_tokens) in considered:
+            rate = BLENDED_PER_M.get(tier)
+            if rate is None or mean_tokens is None or not success_rate:
+                print(f"  [{label}] {tier}: no token data")
+                continue
+            cost = rate * (mean_tokens / 1_000_000) / success_rate
+            print(f"  [{label}] {tier}: ${cost:.4f} expected cost to verified success")
+    elif considered:
+        have = {}
+        for _, tier, (nv, _, _) in considered:
+            have[tier] = min(nv, have.get(tier, nv))
+        have_line = ", ".join(f"{tier}={n}" for tier, n in sorted(have.items()))
+        print(
+            f"\nExpected cost to verified success: not available "
+            f"(need >=10 verified runs per tier; have {have_line})"
+        )
 
 
 def resolve_ref(rows, agent_id_arg):
@@ -386,7 +426,7 @@ def main():
     sub = ap.add_subparsers(dest="command", required=True)
 
     sub.add_parser("status", help="per-agent runs/escalated/wrong since last retune, and RETUNE DUE flags")
-    sub.add_parser("stats", help="agent x model table: runs, success%, escalated, wrong, median duration, tokens")
+    sub.add_parser("stats", help="agent x model table: runs, non-escalated%, escalated, wrong, median duration, tokens")
 
     p_why = sub.add_parser("why", help="why an agent is tiered the way it is, evidence permitting")
     p_why.add_argument("agent_type")

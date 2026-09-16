@@ -100,6 +100,70 @@ def append_jsonl(path, obj):
         f.write(json.dumps(obj) + "\n")
 
 
+LOCK_TIMEOUT_S = 2.0
+LOCK_RETRY_S = 0.01
+LOCK_STALE_S = 5.0
+
+
+def _acquire_lock(lock_path):
+    """os.O_CREAT | os.O_EXCL is atomic at the OS level on both POSIX and
+    Windows (CreateFile with CREATE_NEW), so this is a portable cross-process
+    lock without a third-party dependency. Gives up (returns False, caller
+    proceeds unlocked) after LOCK_TIMEOUT_S rather than ever hanging a hook
+    that must not block the session."""
+    deadline = time.time() + LOCK_TIMEOUT_S
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, str(os.getpid()).encode("utf-8"))
+            finally:
+                os.close(fd)
+            return True
+        except FileExistsError:
+            try:
+                if time.time() - lock_path.stat().st_mtime > LOCK_STALE_S:
+                    lock_path.unlink(missing_ok=True)
+                    continue  # retry immediately after clearing a stale lock
+            except Exception:
+                pass
+            if time.time() >= deadline:
+                return False
+            time.sleep(LOCK_RETRY_S)
+        except Exception:
+            return False
+
+
+def _release_lock(lock_path, held):
+    if not held:
+        return
+    try:
+        lock_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+class pending_lock:
+    """Cross-process lock on `<autoroute dir>/pending.lock`, guarding the
+    whole read -> choose -> rewrite of pending.jsonl (pop_pending) and
+    appends to it (handle_pretooluse). Without this, two SubagentStart hooks
+    firing at the same instant can both read the same pending list before
+    either rewrites it, so both match the same pending entry and one
+    subagent's task/description is silently lost."""
+
+    def __init__(self, pending_path):
+        self.lock_path = pending_path.with_name("pending.lock")
+        self.held = False
+
+    def __enter__(self):
+        self.held = _acquire_lock(self.lock_path)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        _release_lock(self.lock_path, self.held)
+        return False
+
+
 def read_json(path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -205,32 +269,37 @@ def handle_pretooluse(payload, cwd):
         "model_override": tool_input.get("model"),
         "prompt_head": (tool_input.get("prompt") or "")[:200],
     }
-    append_jsonl(autoroute_dir(cwd) / "pending.jsonl", entry)
+    pending_path = autoroute_dir(cwd) / "pending.jsonl"
+    with pending_lock(pending_path):
+        append_jsonl(pending_path, entry)
 
 
 def pop_pending(pending_path, session_id, agent_type):
     """Choose the oldest pending entry for the same session and subagent
-    type; fall back to the oldest entry for the same session. Rewrite the
-    file without the chosen line via write-to-temp-then-replace so a
-    concurrent reader never sees a partially written file."""
-    pending = read_jsonl(pending_path)
+    type; fall back to the oldest entry for the same session. The whole
+    read -> choose -> rewrite is held under `pending_lock` so two
+    SubagentStart hooks running at once can never both match the same
+    pending entry; the write itself still goes to-temp-then-replace so a
+    lock timeout (best-effort fallback) never leaves a reader mid-write."""
+    with pending_lock(pending_path):
+        pending = read_jsonl(pending_path)
 
-    match_idx = None
-    for i, p in enumerate(pending):
-        if p.get("session_id") == session_id and p.get("subagent_type") == agent_type:
-            match_idx = i
-            break
-    if match_idx is None:
+        match_idx = None
         for i, p in enumerate(pending):
-            if p.get("session_id") == session_id:
+            if p.get("session_id") == session_id and p.get("subagent_type") == agent_type:
                 match_idx = i
                 break
-    if match_idx is None:
-        return {}
+        if match_idx is None:
+            for i, p in enumerate(pending):
+                if p.get("session_id") == session_id:
+                    match_idx = i
+                    break
+        if match_idx is None:
+            return {}
 
-    matched = pending.pop(match_idx)
-    write_jsonl_atomic(pending_path, pending)
-    return matched
+        matched = pending.pop(match_idx)
+        write_jsonl_atomic(pending_path, pending)
+        return matched
 
 
 def handle_subagentstart(payload, cwd):

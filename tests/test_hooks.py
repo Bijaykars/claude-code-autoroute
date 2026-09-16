@@ -315,6 +315,62 @@ class LedgerHookTests(unittest.TestCase):
             self.assertIsNone(event["task"])
             self.assertIsNone(event["duration_s"])
 
+    def test_concurrent_subagent_starts_do_not_lose_or_duplicate_pending(self):
+        """10 pending entries for the same session/agent_type, 10 real
+        SubagentStart hook PROCESSES fired at the same instant (distinct
+        agent_ids). Without a lock around pop_pending's read -> choose ->
+        rewrite, two processes can read pending.jsonl before either rewrites
+        it and both match the same entry, losing one task and duplicating
+        another. Repeated 3x in-test to catch flakiness."""
+        agent_ids = [f"c{i}" for i in range(10)]
+        for attempt in range(3):
+            with tempfile.TemporaryDirectory() as tmp:
+                session_id = f"race-{attempt}"
+                pending_path = Path(tmp) / ".claude" / "autoroute" / "pending.jsonl"
+                pending_path.parent.mkdir(parents=True, exist_ok=True)
+                descriptions = [f"race-task-{attempt}-{i}" for i in range(10)]
+                with open(pending_path, "w", encoding="utf-8") as f:
+                    for desc in descriptions:
+                        f.write(json.dumps({
+                            "session_id": session_id, "subagent_type": "implement",
+                            "description": desc, "model_override": None, "prompt_head": desc,
+                        }) + "\n")
+
+                procs = []
+                for agent_id in agent_ids:
+                    payload = json.dumps({
+                        "hook_event_name": "SubagentStart", "session_id": session_id,
+                        "cwd": tmp, "agent_id": agent_id, "agent_type": "implement",
+                    })
+                    p = subprocess.Popen(
+                        [sys.executable, str(HOOKS / "ledger.py")],
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    procs.append((p, payload))
+                for p, payload in procs:
+                    p.stdin.write(payload)
+                    p.stdin.close()
+                for p, _ in procs:
+                    p.wait(timeout=30)
+                    p.stdout.close()
+                    p.stderr.close()
+
+                active_dir = Path(tmp) / ".claude" / "autoroute" / "active"
+                found = []
+                for agent_id in agent_ids:
+                    active_file = active_dir / f"{agent_id}.json"
+                    self.assertTrue(active_file.exists(), f"attempt {attempt}: missing {active_file}")
+                    found.append(json.loads(active_file.read_text())["description"])
+
+                self.assertEqual(
+                    sorted(found), sorted(descriptions),
+                    f"attempt {attempt}: 10 SubagentStart hooks must resolve to 10 distinct, "
+                    f"unduplicated pending descriptions",
+                )
+                remaining = [l for l in pending_path.read_text().splitlines() if l.strip()]
+                self.assertEqual(remaining, [], f"attempt {attempt}: pending.jsonl must be fully drained")
+
 
 class RetuneDueJsonlTests(unittest.TestCase):
     def _write_ledger(self, tmp, events):
@@ -475,11 +531,36 @@ class AutorouteCliTests(unittest.TestCase):
             self.assertEqual(last["type"], "ok")
             self.assertEqual(last["ref"], "a1")
 
-    def test_why_prints_cost_line_when_full_tier_data(self):
+    def test_why_prints_cost_line_when_all_verified(self):
         """Regression for the tier-normalisation bug: real model ids like
         claude-sonnet-5/claude-opus-5 must be bucketed by tier so the
-        BLENDED_PER_M lookup (keyed by tier) actually hits, and the cost
-        line prints once N>=10 for every tier present."""
+        BLENDED_PER_M lookup (keyed by tier) actually hits. The cost line
+        only prints once every tier present has >= 10 VERIFIED (ok/wrong)
+        rows -- resolved-but-unverified rows are not enough."""
+        with tempfile.TemporaryDirectory() as tmp:
+            events = (
+                [{"type": "run", "agent_type": "implement", "agent_id": f"s{i}", "outcome": "resolved",
+                  "model": "claude-sonnet-5", "tokens": {"input": 800, "output": 200}}
+                 for i in range(10)]
+                + [{"type": "run", "agent_type": "implement", "agent_id": f"o{i}", "outcome": "resolved",
+                    "model": "claude-opus-5", "tokens": {"input": 800, "output": 200}}
+                   for i in range(10)]
+                + [{"type": "ok", "ref": f"s{i}"} for i in range(10)]
+                + [{"type": "ok", "ref": f"o{i}"} for i in range(10)]
+            )
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["why", "implement"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("sonnet: N=10", result.stdout)
+            self.assertIn("opus: N=10", result.stdout)
+            self.assertIn("expected cost to verified success", result.stdout)
+            self.assertNotIn("no token data", result.stdout)
+            self.assertNotIn("not available", result.stdout)
+
+    def test_why_cost_not_available_without_verification(self):
+        """Same shape as above (10 resolved rows per tier) but NONE of them
+        verified via ok/wrong -- the non-escalated proxy alone must never
+        produce a cost figure."""
         with tempfile.TemporaryDirectory() as tmp:
             events = (
                 [{"type": "run", "agent_type": "implement", "agent_id": f"s{i}", "outcome": "resolved",
@@ -492,10 +573,9 @@ class AutorouteCliTests(unittest.TestCase):
             self._write_ledger(tmp, events)
             result = self.run_cli(["why", "implement"], tmp)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("sonnet: N=10", result.stdout)
-            self.assertIn("opus: N=10", result.stdout)
-            self.assertIn("expected per successful run", result.stdout)
-            self.assertNotIn("no token data", result.stdout)
+            self.assertIn("Expected cost to verified success: not available", result.stdout)
+            self.assertIn("have opus=0, sonnet=0", result.stdout)
+            self.assertNotIn("$", result.stdout)
 
     def test_why_no_cost_line_when_insufficient_data(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -508,7 +588,8 @@ class AutorouteCliTests(unittest.TestCase):
             result = self.run_cli(["why", "implement"], tmp)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("insufficient data (N=9)", result.stdout)
-            self.assertNotIn("expected per successful run", result.stdout)
+            self.assertNotIn("$", result.stdout)
+            self.assertIn("not available", result.stdout)
 
     def test_off_on_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
