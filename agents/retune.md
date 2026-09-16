@@ -37,7 +37,9 @@ one rung wrong for another week.
    proved wrong. Silence reads as success, so W is the only trace a bad answer
    leaves. `F = E + W`, `fail_rate = F/N`.
 3. Apply the rules below.
-4. Edit the agent's frontmatter in `.claude/agents/<name>.md`. Change **only**
+4. Edit the agent's frontmatter in the file where the agent is actually installed:
+   `~/.claude/agents/<name>.md` by default, or the project's `.claude/agents/<name>.md`
+   when a project-level copy overrides it (check the project first, then home). Change **only**
    the `model:` and `effort:` lines. Never touch the description or body.
 5. Append a marker to that agent's MEMORY.md, exactly this shape, above the
    ledger table:
