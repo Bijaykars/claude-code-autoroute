@@ -1,4 +1,4 @@
-# claude-self-tuning-routing
+# claude-autoroute
 
 A `CLAUDE.md` plus eight subagents and three hooks for Claude Code that route work to the cheapest model that can do it, record when a delegated answer turned out wrong, and revert a routing change when the next batch of evidence says it did not help.
 
@@ -51,22 +51,22 @@ The caller re-dispatches to the rung named and no higher. Rescope first, then ef
 4. `retune` computes `fail_rate = (escalated + WRONG) / rows`. Promote one rung at `>= 0.40` over ten rows, demote one rung at `<= 0.05` over twenty. Never two rungs. Never below Sonnet for an agent that can write code.
 5. Every move writes a marker with its baseline. On the next run retune checks the move first: a promotion that did not cut the fail rate by at least 0.10 is reverted and flagged as "not a tier problem". A demotion that pushed the fail rate above 0.40 is reverted.
 
-## Cost, measured on one working day
+## Cost, in theory
 
-Actual subagent token usage from a single session on a real project (a Node/Express trading-signals codebase with a vanilla-JS frontend), 2026-09-14. Twenty-two delegated tasks: repo searches, log digests, a root-cause bug fix, a new UI tab, a review, two research batteries, a theme pass, a web research task.
+List prices per million tokens from the Claude API docs (2026-09-14): Fable 5.1 $10 in / $50 out, Opus 5 $5 / $25, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $9 / $3.60 / $1.80 per million, so Opus is half of Fable, Sonnet a fifth, Haiku a tenth.
 
-| tier | tokens | blended $/M (80% in, 20% out) | cost |
-|---|---|---|---|
-| Haiku 4.5 (locate, digest) | 462k | 1.80 | $0.83 |
-| Sonnet 5 (implement, review, debug, research) | 1,725k | 3.60 | $6.21 |
-| Opus 5 (UI work) | 275k | 9.00 | $2.48 |
-| Fable 5.1 (web research, docs lookup) | 211k | 18.00 | $3.80 |
-| **routed total** | **2,673k** | | **$13.32** |
-| same tokens, all on Fable 5.1 | 2,673k | 18.00 | $48.12 |
+The saving depends entirely on how much of a session is lookup and mechanical work versus judgment. An illustrative split for a typical coding session, 1M delegated tokens:
 
-Routed cost is 28% of the all-top-model cost, a 72% saving on the delegated work.
+| share of tokens | kind of work | runs on | blended $/M | cost |
+|---|---|---|---|---|
+| 30% | searching, reading logs and docs | Haiku | 1.80 | $0.54 |
+| 50% | specified edits, tests, review, scripts | Sonnet | 3.60 | $1.80 |
+| 15% | UI and design | Opus | 9.00 | $1.35 |
+| 5% | judgment, verdicts | Fable | 18.00 | $0.90 |
+| **100%** | | **routed** | | **$4.59** |
+| 100% | everything on the top model | Fable | 18.00 | $18.00 |
 
-What this does not include: the orchestrating session's own tokens (that is the part Fable was actually paid for), prompt-cache discounts, and the fact that a stronger model might finish in fewer tokens. Treat it as the order of magnitude, not a benchmark. List prices from the Claude API docs on 2026-09-14: Fable 5.1 $10/$50, Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5 per million input/output tokens.
+Under that split the delegated work costs about a quarter of the all-top-model price. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model.
 
 ## Install
 
