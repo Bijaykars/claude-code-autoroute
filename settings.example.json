@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/retune-due.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/retune-due.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/prompt-nudge.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/prompt-nudge.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|PowerShell|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/inline-counter.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/inline-counter.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
