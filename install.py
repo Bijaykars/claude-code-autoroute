@@ -21,6 +21,10 @@ AGENTS_SRC = HERE / "agents"
 HOOKS_SRC = HERE / "hooks"
 CLAUDE_MD_SRC = HERE / "CLAUDE.md"
 SETTINGS_EXAMPLE = HERE / "settings.example.json"
+AUTOROUTE_CLI_SRC = HERE / "autoroute.py"
+# hooks/hooks.json is the plugin manifest, not a hook script; a manual
+# (non-plugin) install has no use for it in ~/.claude/hooks.
+HOOKS_SKIP = {"hooks.json"}
 
 MARK_START = "<!-- autoroute:start -->"
 MARK_END = "<!-- autoroute:end -->"
@@ -45,13 +49,13 @@ def backup(path, dry_run, log):
         shutil.copy2(path, bak)
 
 
-def copy_files(src_dir, dst_dir, dry_run, log):
+def copy_files(src_dir, dst_dir, dry_run, log, skip=()):
     if not dst_dir.exists():
         log.append(f"mkdir {dst_dir}")
         if not dry_run:
             dst_dir.mkdir(parents=True, exist_ok=True)
     for f in sorted(src_dir.glob("*")):
-        if not f.is_file():
+        if not f.is_file() or f.name in skip:
             continue
         dst = dst_dir / f.name
         backup(dst, dry_run, log)
@@ -59,6 +63,17 @@ def copy_files(src_dir, dst_dir, dry_run, log):
         if not dry_run:
             dst_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dst)
+
+
+def copy_one(src, dst_dir, dry_run, log):
+    """Copy a single file (e.g. the autoroute.py CLI) into dst_dir, backing up
+    anything it would overwrite first, same convention as copy_files."""
+    dst = dst_dir / src.name
+    backup(dst, dry_run, log)
+    log.append(f"copy {src.name} -> {dst}")
+    if not dry_run:
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
 
 
 def restore_or_remove(dst, dry_run, log):
@@ -75,11 +90,11 @@ def restore_or_remove(dst, dry_run, log):
             dst.unlink()
 
 
-def uninstall_files(src_dir, dst_dir, dry_run, log):
+def uninstall_files(src_dir, dst_dir, dry_run, log, skip=()):
     if not dst_dir.exists():
         return
     for f in sorted(src_dir.glob("*")):
-        if not f.is_file():
+        if not f.is_file() or f.name in skip:
             continue
         restore_or_remove(dst_dir / f.name, dry_run, log)
 
@@ -247,13 +262,15 @@ def main():
     log = []
     if args.uninstall:
         uninstall_files(AGENTS_SRC, HOME_CLAUDE / "agents", args.dry_run, log)
-        uninstall_files(HOOKS_SRC, HOME_CLAUDE / "hooks", args.dry_run, log)
+        uninstall_files(HOOKS_SRC, HOME_CLAUDE / "hooks", args.dry_run, log, skip=HOOKS_SKIP)
+        restore_or_remove(HOME_CLAUDE / "hooks" / AUTOROUTE_CLI_SRC.name, args.dry_run, log)
         uninstall_settings(args.dry_run, log)
         uninstall_claude_md(args.dry_run, log)
         title = "AutoRoute uninstall"
     else:
         copy_files(AGENTS_SRC, HOME_CLAUDE / "agents", args.dry_run, log)
-        copy_files(HOOKS_SRC, HOME_CLAUDE / "hooks", args.dry_run, log)
+        copy_files(HOOKS_SRC, HOME_CLAUDE / "hooks", args.dry_run, log, skip=HOOKS_SKIP)
+        copy_one(AUTOROUTE_CLI_SRC, HOME_CLAUDE / "hooks", args.dry_run, log)
         install_claude_md(args.dry_run, log, args.full_claude_md)
         install_settings(args.dry_run, log)
         title = "AutoRoute install"

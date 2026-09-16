@@ -1,0 +1,80 @@
+{
+  "description": "AutoRoute hooks: retune-due nudge, delegation reminder, inline-tool counter, and the hook-captured ledger (PreToolUse/SubagentStart/SubagentStop).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/retune-due.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/retune-due.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt-nudge.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt-nudge.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|PowerShell|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/inline-counter.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/inline-counter.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

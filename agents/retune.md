@@ -29,9 +29,24 @@ cheaper knob:
 Move **one rung per run**. Never jump two. Oscillation costs more than being
 one rung wrong for another week.
 
+## Which ledger is primary (v0.3)
+
+Two sources of evidence can exist side by side: the agent-written
+`.claude/agent-memory/<agent>/MEMORY.md` tables (below), and the hook-captured
+`.claude/autoroute/ledger.jsonl` written automatically by `hooks/ledger.py` on
+every `PreToolUse(Agent)` / `SubagentStart` / `SubagentStop`. If
+`.claude/autoroute/ledger.jsonl` exists in this project, treat `python
+autoroute.py stats` and `python autoroute.py status` as the PRIMARY source —
+they need no agent cooperation and cannot be skipped by a run that forgot to
+write its row. MEMORY.md counting remains the fallback for projects, or
+agents, where the JSONL ledger has no rows yet. Both sources are still kept
+this release; do not tell agents to stop appending ledger rows.
+
 ## Procedure
 
-1. Read every `.claude/agent-memory/*/MEMORY.md`.
+1. Read every `.claude/agent-memory/*/MEMORY.md`. If `.claude/autoroute/ledger.jsonl`
+   exists, also run `python autoroute.py status` and `python autoroute.py stats`
+   and prefer their counts per agent (see above).
 2. For each agent, from its ledger table since the last retune marker, count only rows
    whose `model used` matches the agent's CURRENT frontmatter `model:`. Rows run under a
    caller override (e.g. `model: opus` passed to `implement` for one call) are listed
@@ -57,6 +72,12 @@ one rung wrong for another week.
    never re-counted: both this procedure and `retune-due.py` count only rows AFTER the
    last marker line, and the next run judges this move against its baseline (see
    *Verify or revert*).
+   If `.claude/autoroute/ledger.jsonl` exists, ALSO run
+   `python autoroute.py mark-retune <agent> "<same rung/baseline note as above>"`
+   instead of hand-writing a markdown marker for that ledger — this appends a
+   `{"type":"retune",...}` event that `retune-due.py`'s JSONL counting and
+   `autoroute.py status` both read as the cutoff for "since last retune". Do this
+   for every move AND every `NO CHANGE` run, exactly like the MEMORY.md marker below.
 6. Compact each MEMORY.md to under 150 lines — fold repeated ledger rows into
    counts, keep every durable lesson (conventions, ruled-out hypotheses, bug
    classes) verbatim. **Only the first 200 lines are injected into the agent's
@@ -99,6 +120,8 @@ ledger records no correctness incident for that agent.
 **No-change runs still write a marker.** When no rule fires, append
 `## Retune <date> — NO CHANGE · window N=<n> F=<f> rate=<r>` at the end of that agent's ledger, followed by a
 fresh table header, so the rows are consumed and `retune-due` does not raise the same window again next session.
+If `.claude/autoroute/ledger.jsonl` exists, also call
+`python autoroute.py mark-retune <agent> "NO CHANGE window N=<n> F=<f> rate=<r>"` for the same reason.
 
 ## Never demote
 

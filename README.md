@@ -29,6 +29,9 @@ Restart Claude Code.
 By default this installs only the routing block, agents and hooks; your existing `CLAUDE.md` and coding preferences are kept. `--full-claude-md` also installs the coding rules. Details, manual steps and what gets backed up: [docs/install.md](docs/install.md).
 Optional companion: the [Ponytail](https://github.com/DietrichGebert/ponytail) plugin for a minimal-code discipline; AutoRoute does not require it.
 
+**Experimental: as a plugin**, without touching your `CLAUDE.md`:
+`/plugin marketplace add Bijaykars/claude-code-autoroute` then `/plugin install autoroute`. Newer and less exercised than `install.py`; see [docs/plugin.md](docs/plugin.md).
+
 ## How it routes
 
 | you are | do yourself | hand off |
@@ -48,6 +51,11 @@ Small, self-contained tasks with complete context stay in the main session; star
 
 See [docs/escalation.md](docs/escalation.md) for the escalation contract and [docs/self-tuning.md](docs/self-tuning.md) for the ledger, thresholds and rollback.
 Common questions: [docs/faq.md](docs/faq.md).
+
+### Commands
+
+`python autoroute.py <command>` (or `/autoroute <command>` under the plugin) reads `.claude/autoroute/ledger.jsonl`, the hook-captured ledger:
+`status` — per-agent runs/escalated/wrong and RETUNE DUE flags · `stats` — agent x model table of runs, success %, tokens, duration · `why <agent> [words...]` — per-model record, "insufficient data" below N=10, never a recommendation below it · `wrong <agent_id|last> "<why>"` — mark a delegated result wrong · `off` / `on` — the global kill switch · `mark-retune <agent> "<note>"` — the marker `retune` writes instead of a markdown line. Details: [docs/plugin.md](docs/plugin.md).
 
 ## Cost
 
@@ -97,10 +105,13 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 | `hooks/retune-due.py` | SessionStart. Flags when an agent has enough ledger rows to retune. |
 | `hooks/prompt-nudge.py` | UserPromptSubmit. Re-asserts the routing rule each turn. |
 | `hooks/inline-counter.py` | PostToolUse. Nudges after N consecutive inline tool calls without delegating. |
-| `settings.example.json` | The hook wiring. |
+| `hooks/ledger.py` | PreToolUse(Agent)/SubagentStart/SubagentStop. Writes the hook-captured ledger. |
+| `autoroute.py` | CLI: `status`, `stats`, `why`, `wrong`, `off`/`on`, `mark-retune`. |
+| `.claude-plugin/`, `commands/autoroute.md` | Plugin packaging (experimental): `plugin.json`, `marketplace.json`, the `/autoroute` slash command. |
+| `settings.example.json` | The hook wiring for a non-plugin install. |
 | `install.py` | Installer and uninstaller. `--dry-run`, `--uninstall`, `--full-claude-md`. |
-| `tests/test_hooks.py` | Subprocess tests for the three hooks. |
-| `docs/` | Install steps, the escalation contract, the self-tuning loop. |
+| `tests/test_hooks.py` | Subprocess tests for the hooks and the CLI. |
+| `docs/` | Install steps, the plugin path, the escalation contract, the self-tuning loop. |
 
 ## Status
 
@@ -110,11 +121,12 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 
 ## Roadmap
 
-- Package the agents and hooks as a Claude Code plugin with install verification and clean uninstall, so users keep their own `CLAUDE.md`.
-- A small reproducible comparison: ordinary Claude Code, fixed model assignments, routing with retuning. Task success, total cost including the main session and delegation overhead, elapsed time, retries.
-- Short documentation pages: setup and actual behaviour; whether routing saves money, with limits; how failed delegations are escalated, tuned and rolled back.
-- `/autoroute status | explain | off | rollback` commands.
-- An automatic SubagentStop-hook ledger writer, shipped with an "unverified until evidence" status.
+Done in 0.3: plugin packaging (`docs/plugin.md`, experimental), the hook-captured ledger (`hooks/ledger.py`), and `python autoroute.py status | stats | why | wrong | off | on | mark-retune`.
+
+- A small reproducible comparison ("benchmark"): ordinary Claude Code, fixed model assignments, routing with retuning. Task success, total cost including the main session and delegation overhead, elapsed time, retries.
+- Automatic redo: when `autoroute.py wrong` marks a run wrong, re-dispatch the same task to the next rung automatically instead of requiring the caller to do it by hand.
+- `/autoroute rollback` — revert a retune move immediately, without waiting for the next session's verify-or-revert cycle.
+- Cost-to-success routing: once every model cell for an agent reaches N ≥ 10, route new delegations to the cheapest expected-cost-to-success tier automatically instead of only reporting it via `why`.
 
 ## Credits
 

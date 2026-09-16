@@ -3,13 +3,20 @@
 # Contract: retune.md always appends its marker at the END of the file, below a fresh
 # table, so rows above the newest marker were already judged and must never be
 # recounted here — hence "since=lines after the last marker" below.
+#
+# v0.3: also reads the hook-captured `.claude/autoroute/ledger.jsonl` (written by
+# hooks/ledger.py). Both sources are counted per agent; whichever has MORE rows
+# for that agent is reported (the JSONL ledger is the more complete source once
+# it has been running a while, but a fresh install has zero rows in it and must
+# fall back to the agent-written MEMORY.md rows).
 import json, os, re, sys, glob
-try:
-    p = json.load(sys.stdin) if not sys.stdin.isatty() else {}
-    cwd = p.get("cwd") or os.getcwd()
-    ROW = re.compile(r"^\|\s*\d{4}-\d{2}-\d{2}\s*\|[^|]*\|\s*([^|]*?)\s*\|")
-    MULT = re.compile(r"[×x]\s*(\d+)")
-    due = []
+
+ROW = re.compile(r"^\|\s*\d{4}-\d{2}-\d{2}\s*\|[^|]*\|\s*([^|]*?)\s*\|")
+MULT = re.compile(r"[×x]\s*(\d+)")
+
+
+def count_from_memory(cwd):
+    out = {}
     for f in glob.glob(os.path.join(cwd, ".claude", "agent-memory", "*", "MEMORY.md")):
         agent = os.path.basename(os.path.dirname(f))
         lines = open(f, encoding="utf-8", errors="replace").read().splitlines()
@@ -28,6 +35,66 @@ try:
                 n += k; e += k
             elif cell.startswith("wrong"):
                 w += k
+        out[agent] = {"n": n, "e": e, "w": w}
+    return out
+
+
+def count_from_ledger(cwd):
+    path = os.path.join(cwd, ".claude", "autoroute", "ledger.jsonl")
+    if not os.path.isfile(path):
+        return {}
+    rows = []
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for i, line in enumerate(fh):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(obj, dict):
+                rows.append((i, obj))
+
+    last_retune_idx = {}
+    for i, obj in rows:
+        if obj.get("type") == "retune" and obj.get("agent"):
+            last_retune_idx[obj["agent"]] = i
+
+    counts = {}
+    run_agent_of = {}
+    for i, obj in rows:
+        if obj.get("type") != "run":
+            continue
+        agent = obj.get("agent_type")
+        if not agent or i <= last_retune_idx.get(agent, -1):
+            continue
+        c = counts.setdefault(agent, {"n": 0, "e": 0, "w": 0})
+        c["n"] += 1
+        if obj.get("outcome") == "escalated":
+            c["e"] += 1
+        if obj.get("agent_id"):
+            run_agent_of[obj["agent_id"]] = agent
+
+    for i, obj in rows:
+        if obj.get("type") == "wrong":
+            agent = run_agent_of.get(obj.get("ref"))
+            if agent and agent in counts:
+                counts[agent]["w"] += 1
+    return counts
+
+
+try:
+    p = json.load(sys.stdin) if not sys.stdin.isatty() else {}
+    cwd = p.get("cwd") or os.getcwd()
+    mem = count_from_memory(cwd)
+    ledger = count_from_ledger(cwd)
+    due = []
+    for agent in sorted(set(mem) | set(ledger)):
+        m = mem.get(agent, {"n": 0, "e": 0, "w": 0})
+        j = ledger.get(agent, {"n": 0, "e": 0, "w": 0})
+        chosen = j if j["n"] > m["n"] else m
+        n, e, w = chosen["n"], chosen["e"], chosen["w"]
         if n >= 10 or w >= 3:
             rate = f"{(e + w) / n:.2f}" if n else "n/a"
             due.append(f"{agent}: N={n} F={e + w} fail_rate={rate}")

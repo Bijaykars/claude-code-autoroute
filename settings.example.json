@@ -37,6 +37,43 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$HOME/.claude/hooks/ledger.py\" || exit 0",
+            "commandWindows": "python \"$env:USERPROFILE/.claude/hooks/ledger.py\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -128,6 +129,304 @@ class PromptNudgeTests(unittest.TestCase):
         data = json.loads(out)
         msg = data["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Before the 7th consecutive inline", msg)
+
+    def test_off_switch_replaces_reminder(self):
+        with tempfile.TemporaryDirectory() as fake_home:
+            (Path(fake_home) / ".claude" / "autoroute").mkdir(parents=True)
+            (Path(fake_home) / ".claude" / "autoroute" / "off").touch()
+            out = run_hook("prompt-nudge.py", env_extra={"HOME": fake_home, "USERPROFILE": fake_home})
+            data = json.loads(out)
+            msg = data["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("OFF", msg)
+            self.assertIn("do not delegate", msg)
+
+    def test_plugin_root_appends_summary(self):
+        env = dict(os.environ)
+        env.pop("CLAUDE_PLUGIN_ROOT", None)
+        out = run_hook("prompt-nudge.py", env_extra={"CLAUDE_PLUGIN_ROOT": "/fake/plugin/root"})
+        data = json.loads(out)
+        msg = data["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Routing (plugin mode", msg)
+
+
+class LedgerHookTests(unittest.TestCase):
+    """PreToolUse(Agent) -> SubagentStart -> SubagentStop, hooks/ledger.py."""
+
+    def _write_transcript(self, tmp, model, is_error, final_text):
+        path = Path(tmp) / "transcript.jsonl"
+        lines = [
+            {"type": "assistant", "message": {"model": model,
+             "usage": {"input_tokens": 1000, "output_tokens": 200},
+             "content": [{"type": "text", "text": "working on it"}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "t1", "content": "boom", "is_error": is_error}
+            ]}},
+            {"type": "not-a-message-at-all"},
+            {"type": "assistant", "message": {"model": model,
+             "usage": {"input_tokens": 500, "output_tokens": 50},
+             "content": [{"type": "text", "text": final_text}]}},
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(json.dumps(line) + "\n")
+            f.write("not even json\n")  # tolerated garbage line
+        return str(path)
+
+    def _write_agent_frontmatter(self, tmp, agent_type, model, effort):
+        d = Path(tmp) / ".claude" / "agents"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{agent_type}.md").write_text(
+            f"---\nname: {agent_type}\nmodel: {model}\neffort: {effort}\n---\nbody\n",
+            encoding="utf-8",
+        )
+
+    def _run_flow(self, tmp, session_id, agent_id, agent_type, description, transcript_path, escalated):
+        pre = {
+            "hook_event_name": "PreToolUse", "tool_name": "Agent", "session_id": session_id, "cwd": tmp,
+            "tool_input": {"subagent_type": agent_type, "description": description,
+                           "prompt": "x" * 250, "model": None},
+        }
+        run_hook("ledger.py", pre)
+
+        start = {"hook_event_name": "SubagentStart", "session_id": session_id, "cwd": tmp,
+                  "agent_id": agent_id, "agent_type": agent_type}
+        run_hook("ledger.py", start)
+
+        stop = {"hook_event_name": "SubagentStop", "session_id": session_id, "cwd": tmp,
+                "agent_id": agent_id, "agent_type": agent_type, "agent_transcript_path": transcript_path}
+        run_hook("ledger.py", stop)
+
+    def test_end_to_end_escalated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_agent_frontmatter(tmp, "implement", "sonnet", "high")
+            transcript = self._write_transcript(
+                tmp, "claude-sonnet-5", True,
+                "ESCALATE: cannot finish\nTRIED: read the file\nNEXT: model:opus/medium\n",
+            )
+            self._run_flow(tmp, "sess1", "agent-1", "implement", "fix parser bug", transcript, True)
+
+            pending = Path(tmp) / ".claude" / "autoroute" / "pending.jsonl"
+            self.assertFalse(pending.exists() and pending.read_text().strip(), "pending entry must be consumed")
+
+            active = json.loads((Path(tmp) / ".claude" / "autoroute" / "active.json").read_text())
+            self.assertNotIn("agent-1", active, "active entry must be consumed on stop")
+
+            ledger_lines = (Path(tmp) / ".claude" / "autoroute" / "ledger.jsonl").read_text().splitlines()
+            self.assertEqual(len(ledger_lines), 1)
+            event = json.loads(ledger_lines[0])
+            self.assertEqual(event["type"], "run")
+            self.assertEqual(event["agent_id"], "agent-1")
+            self.assertEqual(event["agent_type"], "implement")
+            self.assertEqual(event["task"], "fix parser bug")
+            self.assertEqual(event["model"], "claude-sonnet-5")
+            self.assertEqual(event["configured_model"], "sonnet")
+            self.assertEqual(event["configured_effort"], "high")
+            self.assertEqual(event["outcome"], "escalated")
+            self.assertEqual(event["next"], "model:opus/medium")
+            self.assertEqual(event["tool_errors"], 1)
+            self.assertEqual(event["tokens"], {"input": 1500, "output": 250})
+            self.assertIsNotNone(event["duration_s"])
+            self.assertFalse(event["wrong"])
+
+    def test_end_to_end_resolved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_agent_frontmatter(tmp, "implement", "sonnet", "high")
+            transcript = self._write_transcript(tmp, "claude-sonnet-5", False, "All done, tests green.")
+            self._run_flow(tmp, "sess2", "agent-2", "implement", "add validation", transcript, False)
+
+            ledger_lines = (Path(tmp) / ".claude" / "autoroute" / "ledger.jsonl").read_text().splitlines()
+            event = json.loads(ledger_lines[0])
+            self.assertEqual(event["outcome"], "resolved")
+            self.assertIsNone(event["next"])
+            self.assertEqual(event["tool_errors"], 0)
+
+    def test_off_switch_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
+            (Path(fake_home) / ".claude" / "autoroute").mkdir(parents=True)
+            (Path(fake_home) / ".claude" / "autoroute" / "off").touch()
+            pre = {"hook_event_name": "PreToolUse", "tool_name": "Agent", "session_id": "s", "cwd": tmp,
+                   "tool_input": {"subagent_type": "implement", "description": "d", "prompt": "p"}}
+            run_hook("ledger.py", pre, env_extra={"HOME": fake_home, "USERPROFILE": fake_home})
+            self.assertFalse((Path(tmp) / ".claude" / "autoroute").exists())
+
+    def test_malformed_payload_does_not_crash(self):
+        result = subprocess.run(
+            [sys.executable, str(HOOKS / "ledger.py")],
+            input="not json at all", capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+
+
+class RetuneDueJsonlTests(unittest.TestCase):
+    def _write_ledger(self, tmp, events):
+        d = Path(tmp) / ".claude" / "autoroute"
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "ledger.jsonl", "w", encoding="utf-8") as f:
+            for e in events:
+                f.write(json.dumps(e) + "\n")
+
+    def test_jsonl_only_fires_retune_due(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"a{i}", "outcome": "resolved"}
+                for i in range(9)
+            ] + [{"type": "run", "agent_type": "implement", "agent_id": "a9", "outcome": "escalated"}]
+            self._write_ledger(tmp, events)
+            out = run_hook("retune-due.py", {"cwd": tmp})
+            self.assertIn("implement", out)
+            self.assertIn("N=10", out)
+            self.assertIn("F=1", out)
+
+    def test_jsonl_respects_retune_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"a{i}", "outcome": "resolved"}
+                for i in range(10)
+            ] + [{"type": "retune", "agent": "implement", "note": "bumped"},
+                 {"type": "run", "agent_type": "implement", "agent_id": "b0", "outcome": "resolved"}]
+            self._write_ledger(tmp, events)
+            out = run_hook("retune-due.py", {"cwd": tmp})
+            self.assertEqual(out, "", "only 1 row after the marker; must not fire")
+
+    def test_wrong_event_flips_a_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"a{i}", "outcome": "resolved"}
+                for i in range(3)
+            ] + [{"type": "wrong", "ref": "a0"}, {"type": "wrong", "ref": "a1"}, {"type": "wrong", "ref": "a2"}]
+            self._write_ledger(tmp, events)
+            out = run_hook("retune-due.py", {"cwd": tmp})
+            self.assertIn("implement", out)
+            self.assertIn("N=3", out)
+            self.assertIn("F=3", out)
+
+    def test_larger_source_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # MEMORY.md has 2 rows; ledger.jsonl has 10 -> ledger must be reported.
+            d = Path(tmp) / ".claude" / "agent-memory" / "implement"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "MEMORY.md").write_text(
+                "| date | task shape | resolved or escalated | model used |\n|---|---|---|---|\n"
+                "| 2026-01-01 | a | resolved | sonnet |\n| 2026-01-02 | b | resolved | sonnet |\n",
+                encoding="utf-8",
+            )
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"a{i}", "outcome": "resolved"}
+                for i in range(10)
+            ]
+            self._write_ledger(tmp, events)
+            out = run_hook("retune-due.py", {"cwd": tmp})
+            self.assertIn("N=10", out, "the ledger has more rows than MEMORY.md and must win")
+
+
+class AutorouteCliTests(unittest.TestCase):
+    def run_cli(self, args, cwd, env_extra=None):
+        env = dict(os.environ)
+        if env_extra:
+            env.update(env_extra)
+        result = subprocess.run(
+            [sys.executable, str(REPO / "autoroute.py"), *args],
+            capture_output=True, text=True, cwd=cwd, env=env,
+        )
+        return result
+
+    def _write_ledger(self, tmp, events):
+        d = Path(tmp) / ".claude" / "autoroute"
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "ledger.jsonl", "w", encoding="utf-8") as f:
+            for e in events:
+                f.write(json.dumps(e) + "\n")
+        return d / "ledger.jsonl"
+
+    def test_status_reports_runs_and_retune_due(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"a{i}",
+                 "outcome": "resolved" if i else "escalated", "model": "claude-sonnet-5",
+                 "tokens": {"input": 100, "output": 20}, "duration_s": 10.0}
+                for i in range(10)
+            ]
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["status"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("implement", result.stdout)
+            self.assertIn("RETUNE DUE", result.stdout)
+
+    def test_stats_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": "a1", "outcome": "resolved",
+                 "model": "claude-sonnet-5", "tokens": {"input": 100, "output": 20}, "duration_s": 5.0,
+                 "ts": time.time()},
+            ]
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["stats"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("All time", result.stdout)
+            self.assertIn("Last 30 days", result.stdout)
+            self.assertIn("implement", result.stdout)
+
+    def test_why_insufficient_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": "a1", "outcome": "resolved",
+                 "model": "claude-sonnet-5", "task": "fix the parser"},
+            ]
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["why", "implement"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("insufficient data (N=1)", result.stdout)
+            self.assertIn("Objective:", result.stdout)
+
+    def test_why_task_words_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": "a1", "outcome": "resolved",
+                 "model": "claude-sonnet-5", "task": "fix the parser bug"},
+                {"type": "run", "agent_type": "implement", "agent_id": "a2", "outcome": "resolved",
+                 "model": "claude-sonnet-5", "task": "add a button"},
+            ]
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["why", "implement", "parser"], tmp)
+            self.assertIn("Matching task words", result.stdout)
+
+    def test_wrong_last(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": "a1", "outcome": "resolved"},
+                {"type": "run", "agent_type": "implement", "agent_id": "a2", "outcome": "resolved"},
+            ]
+            ledger = self._write_ledger(tmp, events)
+            result = self.run_cli(["wrong", "last", "root cause disproven"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = ledger.read_text().splitlines()
+            last = json.loads(lines[-1])
+            self.assertEqual(last["type"], "wrong")
+            self.assertEqual(last["ref"], "a2")
+
+    def test_off_on_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
+            env = {"HOME": fake_home, "USERPROFILE": fake_home}
+            off_flag = Path(fake_home) / ".claude" / "autoroute" / "off"
+
+            r = self.run_cli(["off"], tmp, env_extra=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue(off_flag.exists())
+            self.assertIn("OFF", r.stdout)
+
+            r = self.run_cli(["on"], tmp, env_extra=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse(off_flag.exists())
+            self.assertIn("ON", r.stdout)
+
+    def test_mark_retune_appends_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = self._write_ledger(tmp, [])
+            result = self.run_cli(["mark-retune", "implement", "sonnet/high -> sonnet/xhigh"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            last = json.loads(ledger.read_text().splitlines()[-1])
+            self.assertEqual(last["type"], "retune")
+            self.assertEqual(last["agent"], "implement")
 
 
 if __name__ == "__main__":

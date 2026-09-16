@@ -1,15 +1,37 @@
 # Self-tuning loop
 
-See also: [install.md](install.md) (setup) · [escalation.md](escalation.md) (the ESCALATE contract these ledgers record).
+See also: [install.md](install.md) (setup) · [plugin.md](plugin.md) (the plugin path and the hook-captured ledger) · [escalation.md](escalation.md) (the ESCALATE contract these ledgers record).
+
+## Two ledgers, one primary (since 0.3)
+
+There are now two sources of the same evidence, kept side by side:
+
+- **`.claude/autoroute/ledger.jsonl`** — hook-captured, written automatically by
+  `hooks/ledger.py` on every delegation (`PreToolUse(Agent)` →
+  `SubagentStart` → `SubagentStop`). No agent cooperation required, so it
+  cannot be skipped by a run that forgot to write its row. This is the
+  PRIMARY source once it has rows: `retune-due.py` and `agents/retune.md` both
+  prefer it over MEMORY.md, per agent, whichever has more rows.
+- **`.claude/agent-memory/<agent>/MEMORY.md`** — agent-written, the original
+  mechanism (below). Still required this release; not being removed yet. It
+  remains the fallback for a project, or an agent, where the JSONL ledger has
+  no rows.
+
+A delegated result proving wrong is now recorded with `python autoroute.py
+wrong <agent_id|last> "<why>"`, which appends a `wrong` event to the JSONL
+ledger — this replaces (but does not yet remove) hand-writing a `WRONG` row in
+MEMORY.md.
 
 1. Every agent appends one row to its ledger after each run: `| date | task
    shape | resolved or escalated | model used |` in
    `.claude/agent-memory/<agent>/MEMORY.md`.
 2. When a delegated result proves wrong (a test fails, a root cause is
    disproven, an edit has to be redone), the caller appends `| date | task
-   shape | WRONG | model | why |`.
+   shape | WRONG | model | why |` — or, since 0.3, runs `python autoroute.py
+   wrong <agent_id|last> "<why>"`.
 3. `retune-due.py` fires at session start when an agent has ten or more rows
-   since its last marker.
+   since its last marker, checking both ledgers and reporting whichever has
+   more rows.
 4. `retune` computes `fail_rate = (escalated + WRONG) / rows`. Promote one
    rung at `>= 0.40` over ten rows, demote one rung at `<= 0.05` over twenty.
    Never two rungs at once. Never below Sonnet for an agent that can write
