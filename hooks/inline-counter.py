@@ -3,6 +3,11 @@
 import json, os, re, sys, tempfile
 try:
     p = json.load(sys.stdin)
+    # Claude Code stamps hook payloads fired inside a subagent with one of these
+    # identifiers. A subagent's own tool calls must never advance the PARENT
+    # session's inline-tool streak, so bail out before touching the counter file.
+    if any(p.get(k) for k in ("agent_id", "agent_type", "subagent_id", "parent_session_id")):
+        sys.exit(0)
     tool = p.get("tool_name", "")
     sid = re.sub(r"[^A-Za-z0-9-]", "", str(p.get("session_id") or "default")) or "default"
     f = os.path.join(tempfile.gettempdir(), "delegate-count-" + sid)

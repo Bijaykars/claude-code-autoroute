@@ -18,11 +18,12 @@ cheaper knob:
 1  haiku  / low
 2  haiku  / medium
 3  haiku  / high
-4  sonnet / medium
-5  sonnet / high
-6  sonnet / xhigh
-7  opus   / high
-8  opus   / xhigh
+4  sonnet / low
+5  sonnet / medium
+6  sonnet / high
+7  sonnet / xhigh
+8  opus   / high
+9  opus   / xhigh
 ```
 
 Move **one rung per run**. Never jump two. Oscillation costs more than being
@@ -31,21 +32,31 @@ one rung wrong for another week.
 ## Procedure
 
 1. Read every `.claude/agent-memory/*/MEMORY.md`.
-2. For each agent, from its ledger table since the last retune marker, count:
+2. For each agent, from its ledger table since the last retune marker, count only rows
+   whose `model used` matches the agent's CURRENT frontmatter `model:`. Rows run under a
+   caller override (e.g. `model: opus` passed to `implement` for one call) are listed
+   separately in the report and never count toward, or justify demoting, the default tier.
+   From the matching rows count:
    `N` = rows the agent wrote (`resolved` or `escalated`; a `×k` suffix counts k),
    `E` = escalated rows, `W` = `WRONG` rows — written by the CALLER when a result
    proved wrong. Silence reads as success, so W is the only trace a bad answer
    leaves. `F = E + W`, `fail_rate = F/N`.
 3. Apply the rules below.
-4. Edit the agent's frontmatter in the file where the agent is actually installed:
-   `~/.claude/agents/<name>.md` by default, or the project's `.claude/agents/<name>.md`
-   when a project-level copy overrides it (check the project first, then home). Change **only**
-   the `model:` and `effort:` lines. Never touch the description or body.
-5. Append a marker to that agent's MEMORY.md, exactly this shape, above the
-   ledger table:
+4. Write a PROJECT-level override, never the global agent file: if
+   `.claude/agents/<name>.md` does not already exist in this project, copy it from
+   `~/.claude/agents/<name>.md` first. Then change **only** the `model:` and `effort:`
+   lines in that project copy. Never touch the description or body, and never edit
+   `~/.claude/agents/<name>.md` directly — evidence gathered in one project must not
+   silently change routing in every other project.
+5. Append a marker to that agent's MEMORY.md at the END of the file — after the last
+   existing ledger row, never above a table — exactly this shape:
    `## Retune <date> — rung <a>→<b> (<model/effort> → <model/effort>) · baseline N=<n> F=<f> rate=<r> · auto|owner · verify next run`
-   Later runs count only rows after the newest marker, and the next run judges
-   this move against its baseline (see *Verify or revert*).
+   Then append a fresh 4-column table header (`| date | task shape | resolved or
+   escalated | model used |` and its separator row) directly below the marker, so new
+   rows land under it. Rows above the newest marker are consumed by this retune and are
+   never re-counted: both this procedure and `retune-due.py` count only rows AFTER the
+   last marker line, and the next run judges this move against its baseline (see
+   *Verify or revert*).
 6. Compact each MEMORY.md to under 150 lines — fold repeated ledger rows into
    counts, keep every durable lesson (conventions, ruled-out hypotheses, bug
    classes) verbatim. **Only the first 200 lines are injected into the agent's

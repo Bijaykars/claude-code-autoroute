@@ -20,14 +20,28 @@ If you run Claude Code on the most capable model, that model also does your file
 ```bash
 git clone https://github.com/Bijaykars/claude-code-autoroute
 cd claude-code-autoroute
-cp CLAUDE.md ~/.claude/CLAUDE.md          # or merge with your own; a project CLAUDE.md wins on conflict
-cp agents/*.md ~/.claude/agents/
-mkdir -p ~/.claude/hooks && cp hooks/*.py ~/.claude/hooks/
+python install.py            # --dry-run to preview, --uninstall to remove
 ```
 
-Then merge `settings.example.json` into `~/.claude/settings.json` (needs `python` on PATH), install the [Ponytail plugin](https://github.com/DietrichGebert/ponytail) from its own repo, and start a new session. Ledgers appear under `.claude/agent-memory/<agent>/` in each project as agents run; git-ignore that path if you do not want them committed.
+`install.py` (stdlib only, Python 3.9+) copies the agents and hooks into `~/.claude/`, merges the
+three hook entries into `~/.claude/settings.json`, and installs `CLAUDE.md`: a full copy if you have
+none yet, or just section 0 ("Cost routing") appended inside `<!-- autoroute:start -->` /
+`<!-- autoroute:end -->` markers if you already have your own — your other rules are never touched.
+It backs up anything it would overwrite to `<file>.bak-<timestamp>` first, and `--uninstall` restores
+those backups.
 
-To keep your own `CLAUDE.md` and add only the routing, copy section 0 ("Cost routing") from this repo's `CLAUDE.md` into yours. The agents and hooks work without the rest.
+Then install the [Ponytail plugin](https://github.com/DietrichGebert/ponytail) from its own repo and
+start a new session. Ledgers appear under `.claude/agent-memory/<agent>/` in each project as agents
+run; git-ignore that path if you do not want them committed.
+
+Prefer to do it by hand? The manual equivalent:
+
+```bash
+cp agents/*.md ~/.claude/agents/
+mkdir -p ~/.claude/hooks && cp hooks/*.py ~/.claude/hooks/
+# then merge settings.example.json into ~/.claude/settings.json,
+# and merge CLAUDE.md's section 0 into your own CLAUDE.md by hand
+```
 
 ## One real task
 
@@ -93,9 +107,9 @@ The saving depends entirely on how much of a session is lookup and mechanical wo
 
 Under that split the delegated work costs about a quarter of the all-top-model price. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model. Subscription usage is a different accounting from API cost; keep them separate.
 
-### Cost, measured on one working day
+### Estimated API cost from reported token usage, one working day
 
-One session on the author's own project (a Node/Express trading-signals codebase with a vanilla-JS frontend), 2026-09-14, using the token counts each subagent reported on completion. Twenty-two delegated tasks: repo searches, log digests, a root-cause bug fix, a new UI tab, a code review, two research batteries, a theme pass, a web research task.
+One session on the author's own project (a Node/Express trading-signals codebase with a vanilla-JS frontend), 2026-09-14, using the token counts each subagent reported on completion. Twenty-two delegated tasks: repo searches, log digests, a root-cause bug fix, a new UI tab, a code review, two research batteries, a theme pass, a web research task. The dollar figures assume an 80/20 input/output split because the reported counts were totals, not separate input/output/cache numbers; real input/output/cache accounting is on the roadmap.
 
 | tier | tokens | blended $/M (80% in, 20% out) | cost |
 |---|---|---|---|
@@ -135,6 +149,8 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 - Package the agents and hooks as a Claude Code plugin with install verification and clean uninstall, so users keep their own `CLAUDE.md`.
 - A small reproducible comparison: ordinary Claude Code, fixed model assignments, routing with retuning. Task success, total cost including the main session and delegation overhead, elapsed time, retries.
 - Short documentation pages: setup and actual behaviour; whether routing saves money, with limits; how failed delegations are escalated, tuned and rolled back.
+- `/autoroute status | explain | off | rollback` commands.
+- An automatic SubagentStop-hook ledger writer, shipped with an "unverified until evidence" status.
 
 ## Credits
 

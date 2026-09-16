@@ -1,5 +1,8 @@
 # SessionStart hook: flag agents whose ledger has enough new rows since their last
 # "## Retune" marker for retune to judge. Silent when nothing is due or on any error.
+# Contract: retune.md always appends its marker at the END of the file, below a fresh
+# table, so rows above the newest marker were already judged and must never be
+# recounted here — hence "since=lines after the last marker" below.
 import json, os, re, sys, glob
 try:
     p = json.load(sys.stdin) if not sys.stdin.isatty() else {}
