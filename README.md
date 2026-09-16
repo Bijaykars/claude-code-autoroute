@@ -1,6 +1,6 @@
 # AutoRoute for Claude Code
 
-<p align="center"><img src="docs/autoroute.png" alt="AutoRoute for Claude Code: the main session plans and decides, Haiku does file searches and summaries, Sonnet does implementation and tests, Opus takes difficult debugging when Sonnet escalates" width="560"></p>
+<p align="center"><img src="docs/autoroute.png" alt="AutoRoute for Claude Code: the main session plans and decides, Haiku does file searches and summaries, Sonnet does implementation and tests, Opus takes hard debugging and UI work when Sonnet escalates; observed outcomes (tokens, duration, escalations) feed a retune step that keeps changes that help and reverts those that do not" width="560"></p>
 
 AutoRoute is Claude Code model routing built on Claude Code subagents, spreading work across Haiku, Sonnet, and Opus with failure tracking and experimental self-tuning.
 
