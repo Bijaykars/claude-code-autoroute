@@ -1,6 +1,6 @@
 # AutoRoute for Claude Code
 
-Cost-aware subagent routing for Claude Code, with failure tracking and experimental self-tuning.
+AutoRoute is Claude Code model routing built on Claude Code subagents, spreading work across Haiku, Sonnet, and Opus with failure tracking and experimental self-tuning.
 
 Running everything on the top model means it also does your file searches, log reads and boilerplate; hand-written routing rules go stale, and nothing tells you when a cheap model was quietly wrong. AutoRoute lets cheaper models handle routine work, and escalates when they struggle.
 
@@ -45,6 +45,7 @@ Small, self-contained tasks with complete context stay in the main session; star
 | ambiguous design or hard debugging | opus (via `model: opus`) |
 
 See [docs/escalation.md](docs/escalation.md) for the escalation contract and [docs/self-tuning.md](docs/self-tuning.md) for the ledger, thresholds and rollback.
+Common questions: [docs/faq.md](docs/faq.md).
 
 ## Cost
 
