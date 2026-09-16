@@ -8,7 +8,7 @@ It does not intercept API calls. The session reads its own model tier from a rou
 
 ## Does it require a proxy or gateway?
 
-No. It is a `CLAUDE.md`, eight subagent definitions and three hook scripts; nothing sits between Claude Code and the API. Contrast that with gateway-style tools such as claude-code-router (musistudio), which route by rewriting requests to different providers — AutoRoute only decides which built-in subagent handles a task.
+No. It is a `CLAUDE.md`, eight subagent definitions, four hook scripts and a small CLI; nothing sits between Claude Code and the API. Contrast that with gateway-style tools such as claude-code-router (musistudio), which route by rewriting requests to different providers — AutoRoute only decides which built-in subagent handles a task.
 
 ## Does it reduce API costs or subscription usage?
 
