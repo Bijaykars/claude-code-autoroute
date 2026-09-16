@@ -17,6 +17,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 HOME_CLAUDE = Path.home() / ".claude"
+# Forward-slash, no trailing slash -- substituted for the "<HOME>" placeholder
+# in settings.example.json so installed hook commands are absolute paths with
+# no $HOME/$env:USERPROFILE shell variable (there is no cross-platform way to
+# write one command string that expands either).
+HOME_STR = Path.home().as_posix()
 AGENTS_SRC = HERE / "agents"
 HOOKS_SRC = HERE / "hooks"
 CLAUDE_MD_SRC = HERE / "CLAUDE.md"
@@ -189,6 +194,18 @@ def hook_filename(command):
     return m.group(1) if m else None
 
 
+def resolve_home_placeholder(entry):
+    """Deep-copy an entry from settings.example.json with '<HOME>' replaced by
+    this machine's actual home directory (forward slashes, quoted), so the
+    installed command is a shell-independent absolute path -- no
+    $HOME/$env:USERPROFILE variable for a shell to expand."""
+    entry = json.loads(json.dumps(entry))
+    for h in entry.get("hooks", []):
+        if "command" in h:
+            h["command"] = h["command"].replace("<HOME>", HOME_STR)
+    return entry
+
+
 def install_settings(dry_run, log):
     dst = HOME_CLAUDE / "settings.json"
     example = json.loads(SETTINGS_EXAMPLE.read_text(encoding="utf-8"))
@@ -198,16 +215,25 @@ def install_settings(dry_run, log):
     for event, entries in example["hooks"].items():
         existing = hooks.setdefault(event, [])
         for entry in entries:
-            fnames = {hook_filename(h.get("command", "")) for h in entry.get("hooks", [])}
-            already = any(
-                hook_filename(h.get("command", "")) in fnames
-                for e in existing
-                for h in e.get("hooks", [])
+            resolved = resolve_home_placeholder(entry)
+            fnames = {hook_filename(h.get("command", "")) for h in resolved.get("hooks", [])}
+            match_i = next(
+                (i for i, e in enumerate(existing)
+                 if any(hook_filename(h.get("command", "")) in fnames for h in e.get("hooks", []))),
+                None,
             )
-            if not already:
-                existing.append(entry)
+            names = ", ".join(sorted(f for f in fnames if f))
+            if match_i is None:
+                existing.append(resolved)
                 changed = True
-                log.append(f"add {event} hook entry ({', '.join(sorted(f for f in fnames if f))})")
+                log.append(f"add {event} hook entry ({names})")
+            elif existing[match_i] != resolved:
+                # Re-run on an older install: normalises a stale entry (e.g.
+                # a $HOME/$env:USERPROFILE variable or a leftover
+                # commandWindows key) to the current absolute-path form.
+                existing[match_i] = resolved
+                changed = True
+                log.append(f"update {event} hook entry ({names}) -- normalised to absolute path")
     if changed:
         backup(dst, dry_run, log)
         log.append(f"write {dst}")
@@ -215,7 +241,7 @@ def install_settings(dry_run, log):
             HOME_CLAUDE.mkdir(parents=True, exist_ok=True)
             dst.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     else:
-        log.append(f"{dst}: all three hooks already present, no change")
+        log.append(f"{dst}: all six hooks already present and up to date, no change")
 
 
 def uninstall_settings(dry_run, log):

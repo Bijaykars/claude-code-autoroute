@@ -20,7 +20,17 @@ There are now two sources of the same evidence, kept side by side:
 A delegated result proving wrong is now recorded with `python autoroute.py
 wrong <agent_id|last> "<why>"`, which appends a `wrong` event to the JSONL
 ledger — this replaces (but does not yet remove) hand-writing a `WRONG` row in
-MEMORY.md.
+MEMORY.md. `python autoroute.py ok <agent_id|last>` is the positive
+counterpart, for when someone has actually checked a result and it held up.
+
+**`outcome: "resolved"` on a run event means the subagent finished without
+escalating — it is not a correctness signal.** Each run event also carries a
+`verified` field, null by default; `wrong` and `ok` set the referenced run's
+*effective* verified to false/true (the stored field itself stays null unless
+something sets it directly). `autoroute.py stats` and `why` compute success as
+`resolved and not wrong`, as before, but also print counts of `verified:
+true/false/unknown` next to it so the "resolved ≠ correct" caveat stays
+visible instead of implied.
 
 1. Every agent appends one row to its ledger after each run: `| date | task
    shape | resolved or escalated | model used |` in

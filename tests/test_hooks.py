@@ -208,8 +208,8 @@ class LedgerHookTests(unittest.TestCase):
             pending = Path(tmp) / ".claude" / "autoroute" / "pending.jsonl"
             self.assertFalse(pending.exists() and pending.read_text().strip(), "pending entry must be consumed")
 
-            active = json.loads((Path(tmp) / ".claude" / "autoroute" / "active.json").read_text())
-            self.assertNotIn("agent-1", active, "active entry must be consumed on stop")
+            active_file = Path(tmp) / ".claude" / "autoroute" / "active" / "agent-1.json"
+            self.assertFalse(active_file.exists(), "active entry must be consumed (deleted) on stop")
 
             ledger_lines = (Path(tmp) / ".claude" / "autoroute" / "ledger.jsonl").read_text().splitlines()
             self.assertEqual(len(ledger_lines), 1)
@@ -219,9 +219,11 @@ class LedgerHookTests(unittest.TestCase):
             self.assertEqual(event["agent_type"], "implement")
             self.assertEqual(event["task"], "fix parser bug")
             self.assertEqual(event["model"], "claude-sonnet-5")
+            self.assertEqual(event["model_tier"], "sonnet")
             self.assertEqual(event["configured_model"], "sonnet")
             self.assertEqual(event["configured_effort"], "high")
             self.assertEqual(event["outcome"], "escalated")
+            self.assertIsNone(event["verified"])
             self.assertEqual(event["next"], "model:opus/medium")
             self.assertEqual(event["tool_errors"], 1)
             self.assertEqual(event["tokens"], {"input": 1500, "output": 250})
@@ -255,6 +257,63 @@ class LedgerHookTests(unittest.TestCase):
             input="not json at all", capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0)
+
+    def test_parallel_starts_stops_out_of_order(self):
+        """Three PreToolUse/SubagentStart pairs on the same session, then
+        SubagentStop calls in a different order than the starts. Each ledger
+        row must still carry its own task, and nothing may crash -- this is
+        the per-agent-file active/ directory replacing the single
+        active.json that a concurrent start/stop could race on."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_agent_frontmatter(tmp, "implement", "sonnet", "high")
+            session_id = "sessP"
+            agent_ids = ["p0", "p1", "p2"]
+            descriptions = ["task-0", "task-1", "task-2"]
+            for desc in descriptions:
+                pre = {"hook_event_name": "PreToolUse", "tool_name": "Agent", "session_id": session_id,
+                       "cwd": tmp, "tool_input": {"subagent_type": "implement", "description": desc,
+                                                   "prompt": "x", "model": None}}
+                run_hook("ledger.py", pre)
+            for agent_id in agent_ids:
+                start = {"hook_event_name": "SubagentStart", "session_id": session_id, "cwd": tmp,
+                         "agent_id": agent_id, "agent_type": "implement"}
+                run_hook("ledger.py", start)
+
+            transcripts = {
+                agent_id: self._write_transcript(tmp, "claude-sonnet-5", False, f"done {agent_id}")
+                for agent_id in agent_ids
+            }
+            for agent_id in ["p1", "p0", "p2"]:  # deliberately out of start order
+                stop = {"hook_event_name": "SubagentStop", "session_id": session_id, "cwd": tmp,
+                        "agent_id": agent_id, "agent_type": "implement",
+                        "agent_transcript_path": transcripts[agent_id]}
+                run_hook("ledger.py", stop)
+
+            ledger_lines = (Path(tmp) / ".claude" / "autoroute" / "ledger.jsonl").read_text().splitlines()
+            self.assertEqual(len(ledger_lines), 3)
+            events = [json.loads(l) for l in ledger_lines]
+            tasks = sorted(e["task"] for e in events)
+            self.assertEqual(tasks, descriptions, "each run must get some task, none lost or duplicated")
+            for agent_id in agent_ids:
+                self.assertFalse(
+                    (Path(tmp) / ".claude" / "autoroute" / "active" / f"{agent_id}.json").exists()
+                )
+
+    def test_orphan_stop_no_start(self):
+        """SubagentStop with no matching SubagentStart on record must still
+        write a ledger row (duration/task null) instead of crashing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            transcript = self._write_transcript(tmp, "claude-sonnet-5", False, "done")
+            stop = {"hook_event_name": "SubagentStop", "session_id": "sess-orphan", "cwd": tmp,
+                    "agent_id": "orphan-1", "agent_type": "implement", "agent_transcript_path": transcript}
+            run_hook("ledger.py", stop)
+
+            ledger_lines = (Path(tmp) / ".claude" / "autoroute" / "ledger.jsonl").read_text().splitlines()
+            self.assertEqual(len(ledger_lines), 1)
+            event = json.loads(ledger_lines[0])
+            self.assertEqual(event["agent_id"], "orphan-1")
+            self.assertIsNone(event["task"])
+            self.assertIsNone(event["duration_s"])
 
 
 class RetuneDueJsonlTests(unittest.TestCase):
@@ -403,6 +462,53 @@ class AutorouteCliTests(unittest.TestCase):
             last = json.loads(lines[-1])
             self.assertEqual(last["type"], "wrong")
             self.assertEqual(last["ref"], "a2")
+
+    def test_ok_last(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": "a1", "outcome": "resolved"},
+            ]
+            ledger = self._write_ledger(tmp, events)
+            result = self.run_cli(["ok", "last"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            last = json.loads(ledger.read_text().splitlines()[-1])
+            self.assertEqual(last["type"], "ok")
+            self.assertEqual(last["ref"], "a1")
+
+    def test_why_prints_cost_line_when_full_tier_data(self):
+        """Regression for the tier-normalisation bug: real model ids like
+        claude-sonnet-5/claude-opus-5 must be bucketed by tier so the
+        BLENDED_PER_M lookup (keyed by tier) actually hits, and the cost
+        line prints once N>=10 for every tier present."""
+        with tempfile.TemporaryDirectory() as tmp:
+            events = (
+                [{"type": "run", "agent_type": "implement", "agent_id": f"s{i}", "outcome": "resolved",
+                  "model": "claude-sonnet-5", "tokens": {"input": 800, "output": 200}}
+                 for i in range(10)]
+                + [{"type": "run", "agent_type": "implement", "agent_id": f"o{i}", "outcome": "resolved",
+                    "model": "claude-opus-5", "tokens": {"input": 800, "output": 200}}
+                   for i in range(10)]
+            )
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["why", "implement"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("sonnet: N=10", result.stdout)
+            self.assertIn("opus: N=10", result.stdout)
+            self.assertIn("expected per successful run", result.stdout)
+            self.assertNotIn("no token data", result.stdout)
+
+    def test_why_no_cost_line_when_insufficient_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                {"type": "run", "agent_type": "implement", "agent_id": f"s{i}", "outcome": "resolved",
+                 "model": "claude-sonnet-5", "tokens": {"input": 800, "output": 200}}
+                for i in range(9)
+            ]
+            self._write_ledger(tmp, events)
+            result = self.run_cli(["why", "implement"], tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("insufficient data (N=9)", result.stdout)
+            self.assertNotIn("expected per successful run", result.stdout)
 
     def test_off_on_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:

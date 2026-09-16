@@ -106,7 +106,7 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 | `hooks/prompt-nudge.py` | UserPromptSubmit. Re-asserts the routing rule each turn. |
 | `hooks/inline-counter.py` | PostToolUse. Nudges after N consecutive inline tool calls without delegating. |
 | `hooks/ledger.py` | PreToolUse(Agent)/SubagentStart/SubagentStop. Writes the hook-captured ledger. |
-| `autoroute.py` | CLI: `status`, `stats`, `why`, `wrong`, `off`/`on`, `mark-retune`. |
+| `autoroute.py` | CLI: `status`, `stats`, `why`, `wrong`, `ok`, `off`/`on`, `mark-retune`. |
 | `.claude-plugin/`, `commands/autoroute.md` | Plugin packaging (experimental): `plugin.json`, `marketplace.json`, the `/autoroute` slash command. |
 | `settings.example.json` | The hook wiring for a non-plugin install. |
 | `install.py` | Installer and uninstaller. `--dry-run`, `--uninstall`, `--full-claude-md`. |
@@ -117,16 +117,15 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 
 - Running on one project since 2026-09-14; the ledgers have a handful of rows, and one working day has been measured — neither is a benchmark.
 - The retune thresholds are starting heuristics, and the file that defines them says so.
-- Agents only write their ledger row if the instruction is explicit and includes the path.
+- Since 0.3, the ledger is captured by hooks (`hooks/ledger.py`), not written by hand: every delegation gets a row automatically. `outcome: "resolved"` means the subagent finished without escalating — it is NOT a correctness signal; run `autoroute.py wrong`/`ok` to record whether a result was actually checked. Agent-written `.claude/agent-memory/<agent>/MEMORY.md` rows are kept only as a fallback for a project or agent where the JSONL ledger has no rows yet.
 
 ## Roadmap
 
 Done in 0.3: plugin packaging (`docs/plugin.md`, experimental), the hook-captured ledger (`hooks/ledger.py`), and `python autoroute.py status | stats | why | wrong | off | on | mark-retune`.
 
-- A small reproducible comparison ("benchmark"): ordinary Claude Code, fixed model assignments, routing with retuning. Task success, total cost including the main session and delegation overhead, elapsed time, retries.
-- Automatic redo: when `autoroute.py wrong` marks a run wrong, re-dispatch the same task to the next rung automatically instead of requiring the caller to do it by hand.
-- `/autoroute rollback` — revert a retune move immediately, without waiting for the next session's verify-or-revert cycle.
-- Cost-to-success routing: once every model cell for an agent reaches N ≥ 10, route new delegations to the cheapest expected-cost-to-success tier automatically instead of only reporting it via `why`.
+- **v0.4**: `/autoroute redo` — re-run the last delegation one rung up automatically; correctness signals sourced from tests/lint/build instead of only a human `wrong`/`ok` call; task-shape tagging on ledger rows.
+- **v0.5**: cost-to-success routing by task shape, once every model cell for an agent reaches N ≥ 10 — with the caveat that escalated samples are selection-biased (Opus only ever sees the tasks Sonnet already failed), so adjacent tiers must be compared on matched task shapes, not raw success rates.
+- The small reproducible comparison ("benchmark") described above is unchanged and still on the roadmap: ordinary Claude Code, fixed model assignments, routing with retuning — task success, total cost including the main session and delegation overhead, elapsed time, retries.
 
 ## Credits
 

@@ -24,7 +24,7 @@ Each agent keeps a ledger; the caller writes a `WRONG` row when a delegated answ
 
 ## Does it work on Windows?
 
-Yes. The hooks ship a `commandWindows` variant alongside the POSIX `command`, and it has been tested with Python 3.12 on Windows 11 via Git Bash. It needs `python` on `PATH`.
+Yes. `install.py` writes each hook's absolute path into `settings.json` (forward slashes, quoted) instead of a `$HOME`/`$env:USERPROFILE` shell variable, so the same `command` string runs under any shell; it has been tested with Python 3.12 on Windows 11 via Git Bash. It needs `python` on `PATH`.
 
 ## Can I keep my own CLAUDE.md?
 

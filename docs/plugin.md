@@ -42,9 +42,15 @@ three events:
 - `SubagentStart` — matches the pending entry to the subagent that actually
   started (same session, same subagent type; oldest first) and starts a timer.
 - `SubagentStop` — reads the subagent's own transcript, and appends one `run`
-  event to the ledger: model actually used, the agent's configured
-  model/effort, resolved-or-escalated outcome, the `NEXT:` line if escalated,
-  a count of tool errors, wall-clock duration, and summed token usage.
+  event to the ledger: model actually used (plus its normalised tier —
+  `claude-sonnet-5` -> `sonnet` — since pricing and per-model tables key on
+  the tier, not the raw id), the agent's configured model/effort,
+  resolved-or-escalated outcome, a `verified` field (null until a caller runs
+  `wrong`/`ok`), the `NEXT:` line if escalated, a count of tool errors,
+  wall-clock duration, and summed token usage. **`outcome: "resolved"` means
+  the subagent finished without escalating — it is not a correctness
+  signal.** Only `wrong`/`ok` (or a directly-set `verified`) says whether the
+  result was actually checked.
 
 This never raises and never blocks a tool call; any failure is a silent no-op,
 because a ledger hook must not be able to break a session.
@@ -52,9 +58,10 @@ because a ledger hook must not be able to break a session.
 ## Where the ledger lives
 
 `<project>/.claude/autoroute/ledger.jsonl` — one JSON object per line, one
-line per event (`run`, `wrong`, or `retune`). Working state used only to
+line per event (`run`, `wrong`, `ok`, or `retune`). Working state used only to
 correlate the three hook events lives alongside it: `pending.jsonl` and
-`active.json`; both are scratch files, safe to delete.
+`active/<agent_id>.json` (one file per running agent, so parallel delegations
+never race on a shared file); both are scratch, safe to delete.
 
 Agents still additionally write their own MEMORY.md ledger rows this release
 — both sources are kept side by side, and `retune-due.py` / `agents/retune.md`
@@ -87,8 +94,11 @@ when installed as a plugin:
   matching those words. Cells with N < 10 are marked "insufficient data" and
   never carry a recommendation. Prints an expected-cost-per-success figure
   only when every displayed cell has N >= 10.
-- `wrong <agent_id|last> "<why>"` — appends a `wrong` event; this replaces
-  hand-writing a WRONG row in the agent's MEMORY.md ledger table.
+- `wrong <agent_id|last> "<why>"` — appends a `wrong` event (effective
+  `verified: false` for that run); this replaces hand-writing a WRONG row in
+  the agent's MEMORY.md ledger table.
+- `ok <agent_id|last>` — appends an `ok` event (effective `verified: true`
+  for that run) once someone has actually checked the result.
 - `off` / `on` — the global switch above.
 - `mark-retune <agent> "<note>"` — appends a `retune` event; `agents/retune.md`
   calls this instead of writing a markdown marker when the JSONL ledger

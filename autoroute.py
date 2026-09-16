@@ -7,6 +7,7 @@ answers routing questions for THIS project.
     python autoroute.py stats
     python autoroute.py why <agent_type> [task words...]
     python autoroute.py wrong <agent_id|last> "<why>"
+    python autoroute.py ok <agent_id|last>
     python autoroute.py off | on
     python autoroute.py mark-retune <agent_type> "<note>"
 
@@ -25,6 +26,26 @@ from pathlib import Path
 BLENDED_PER_M = {"haiku": 1.80, "sonnet": 3.60, "opus": 9.00, "fable": 18.00}
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 DAY = 86400
+
+
+def model_tier(model_id):
+    """claude-sonnet-5 -> sonnet, claude-opus-5 -> opus, etc. Unknown/empty ->
+    'unknown'. Mirrors hooks/ledger.py's model_tier -- keep the two in sync."""
+    if not model_id:
+        return "unknown"
+    m = model_id.lower()
+    for tier in ("haiku", "sonnet", "opus"):
+        if tier in m:
+            return tier
+    if "fable" in m or "mythos" in m:
+        return "fable"
+    return "unknown"
+
+
+def row_tier(r):
+    """Prefer the tier a newer ledger row already recorded; derive it from
+    the raw model id for older rows that predate the model_tier field."""
+    return r.get("model_tier") or model_tier(r.get("model"))
 
 
 def off_path():
@@ -73,12 +94,43 @@ def wrong_refs(rows):
     return {r.get("ref") for r in rows if r.get("type") == "wrong" and r.get("ref")}
 
 
+def ok_refs(rows):
+    return {r.get("ref") for r in rows if r.get("type") == "ok" and r.get("ref")}
+
+
 def runs(rows):
     return [r for r in rows if r.get("type") == "run"]
 
 
 def is_success(r, wrongset):
     return r.get("outcome") == "resolved" and r.get("agent_id") not in wrongset
+
+
+def effective_verified(r, wrongset, okset):
+    """true/false/None (unknown). `outcome == "resolved"` only means the
+    subagent did not escalate -- it is not a correctness signal on its own;
+    this reflects an explicit `autoroute.py wrong`/`ok` call against the
+    run's agent_id, falling back to the row's own (usually still-null)
+    `verified` field."""
+    aid = r.get("agent_id")
+    if aid in wrongset:
+        return False
+    if aid in okset:
+        return True
+    return r.get("verified")
+
+
+def verified_counts(subset, wrongset, okset):
+    t = f = u = 0
+    for r in subset:
+        v = effective_verified(r, wrongset, okset)
+        if v is True:
+            t += 1
+        elif v is False:
+            f += 1
+        else:
+            u += 1
+    return t, f, u
 
 
 def load_agent_frontmatter(agent_type, cwd):
@@ -158,6 +210,7 @@ def cmd_stats(args, cwd):
     rows = load_rows(cwd)
     all_runs = runs(rows)
     wset = wrong_refs(rows)
+    okset = ok_refs(rows)
     now = time.time()
 
     def table(subset, title):
@@ -166,12 +219,16 @@ def cmd_stats(args, cwd):
             print("  (no runs)")
             return
         groups = {}
+        raw_ids = {}
         for r in subset:
-            key = (r.get("agent_type") or "unknown", r.get("model") or "unknown")
+            tier = row_tier(r)
+            key = (r.get("agent_type") or "unknown", tier)
             groups.setdefault(key, []).append(r)
-        print(f"  {'agent':<16}{'model':<10}{'runs':>6}{'success%':>10}{'escalated':>11}{'wrong':>7}{'median_s':>10}{'tokens':>12}")
-        for (agent, model) in sorted(groups):
-            g = groups[(agent, model)]
+            if r.get("model"):
+                raw_ids.setdefault(tier, set()).add(r["model"])
+        print(f"  {'agent':<16}{'tier':<10}{'runs':>6}{'success%':>10}{'escalated':>11}{'wrong':>7}{'median_s':>10}{'tokens':>12}")
+        for (agent, tier) in sorted(groups):
+            g = groups[(agent, tier)]
             n = len(g)
             succ = sum(1 for r in g if is_success(r, wset))
             esc = sum(1 for r in g if r.get("outcome") == "escalated")
@@ -181,7 +238,13 @@ def cmd_stats(args, cwd):
             toks = [token_total(r) for r in g]
             toks = [t for t in toks if t is not None]
             tot_tok = sum(toks) if toks else 0
-            print(f"  {agent:<16}{model:<10}{n:>6}{(succ / n * 100):>9.0f}%{esc:>11}{wr:>7}{med:>10}{tot_tok:>12}")
+            print(f"  {agent:<16}{tier:<10}{n:>6}{(succ / n * 100):>9.0f}%{esc:>11}{wr:>7}{med:>10}{tot_tok:>12}")
+        if raw_ids:
+            ids_line = "; ".join(f"{tier}={','.join(sorted(ids))}" for tier, ids in sorted(raw_ids.items()))
+            print(f"  raw model ids: {ids_line}")
+        vt, vf, vu = verified_counts(subset, wset, okset)
+        print(f"  verified: true={vt} false={vf} unknown={vu} "
+              f"('resolved' means the subagent did not escalate, not that it was correct)")
 
     table(all_runs, "All time")
     recent = [r for r in all_runs if isinstance(r.get("ts"), (int, float)) and r["ts"] >= now - 30 * DAY]
@@ -194,6 +257,7 @@ def cmd_why(args, cwd):
     rows = load_rows(cwd)
     all_runs = [r for r in runs(rows) if r.get("agent_type") == agent]
     wset = wrong_refs(rows)
+    okset = ok_refs(rows)
 
     model, effort = load_agent_frontmatter(agent, cwd)
     print(f"{agent}: configured tier = model={model or 'unknown'} effort={effort or 'unknown'}")
@@ -201,7 +265,7 @@ def cmd_why(args, cwd):
     def cells_for(subset):
         groups = {}
         for r in subset:
-            groups.setdefault(r.get("model") or "unknown", []).append(r)
+            groups.setdefault(row_tier(r), []).append(r)
         return groups
 
     def print_cells(groups, label):
@@ -210,20 +274,30 @@ def cmd_why(args, cwd):
             print("  (no runs)")
             return {}
         result = {}
-        for model_name in sorted(groups):
-            g = groups[model_name]
+        raw_ids = {}
+        for tier in sorted(groups):
+            g = groups[tier]
             n = len(g)
+            for r in g:
+                if r.get("model"):
+                    raw_ids.setdefault(tier, set()).add(r["model"])
             if n < 10:
-                print(f"  {model_name}: insufficient data (N={n}) -- default tier applies")
-                result[model_name] = None
+                print(f"  {tier}: insufficient data (N={n}) -- default tier applies")
+                result[tier] = None
                 continue
             succ = sum(1 for r in g if is_success(r, wset)) / n * 100
-            print(f"  {model_name}: N={n} success={succ:.0f}%")
+            print(f"  {tier}: N={n} success={succ:.0f}%")
             toks = [token_total(r) for r in g]
             toks = [t for t in toks if t is not None]
             mean_tok = (sum(toks) / len(toks)) if toks else None
             success_rate = succ / 100.0
-            result[model_name] = {"n": n, "success_rate": success_rate, "mean_tokens": mean_tok}
+            result[tier] = {"n": n, "success_rate": success_rate, "mean_tokens": mean_tok}
+        if raw_ids:
+            ids_line = "; ".join(f"{tier}={','.join(sorted(ids))}" for tier, ids in sorted(raw_ids.items()))
+            print(f"  raw model ids: {ids_line}")
+        vt, vf, vu = verified_counts([r for g in groups.values() for r in g], wset, okset)
+        print(f"  verified: true={vt} false={vf} unknown={vu} "
+              f"('resolved' means the subagent did not escalate, not that it was correct)")
         return result
 
     base_cells = print_cells(cells_for(all_runs), "Per-model record")
@@ -241,34 +315,51 @@ def cmd_why(args, cwd):
 
     considered = list(base_cells.values()) + (list(matched_cells.values()) if matched_cells is not None else [])
     if considered and all(c is not None for c in considered):
-        print("Expected cost per model (blended $/M x mean tokens / success rate):")
+        print("Expected cost per tier (blended $/M x mean tokens / success rate):")
         for label, groups in (("base", base_cells), ("task-filtered", matched_cells or {})):
-            for model_name, c in groups.items():
+            for tier, c in groups.items():
                 if c is None:
                     continue
-                rate = BLENDED_PER_M.get(model_name)
+                rate = BLENDED_PER_M.get(tier)
                 if rate is None or c["mean_tokens"] is None or c["success_rate"] <= 0:
-                    print(f"  [{label}] {model_name}: no token data")
+                    print(f"  [{label}] {tier}: no token data")
                     continue
                 cost = rate * (c["mean_tokens"] / 1_000_000) / c["success_rate"]
-                print(f"  [{label}] {model_name}: ${cost:.4f} expected per successful run")
+                print(f"  [{label}] {tier}: ${cost:.4f} expected per successful run")
+
+
+def resolve_ref(rows, agent_id_arg):
+    """agent_id_arg is either a literal agent_id or the literal string
+    'last', meaning the most recent run event's agent_id. Returns None (with
+    nothing printed) if 'last' has no run to resolve against."""
+    if agent_id_arg != "last":
+        return agent_id_arg
+    last_run = None
+    for r in rows:
+        if r.get("type") == "run":
+            last_run = r
+    return last_run.get("agent_id") if last_run else None
 
 
 def cmd_wrong(args, cwd):
     rows = load_rows(cwd)
-    ref = args.agent_id
-    if ref == "last":
-        last_run = None
-        for r in rows:
-            if r.get("type") == "run":
-                last_run = r
-        if not last_run:
-            print("no runs recorded in this project's ledger yet")
-            return 1
-        ref = last_run.get("agent_id")
+    ref = resolve_ref(rows, args.agent_id)
+    if not ref:
+        print("no runs recorded in this project's ledger yet")
+        return 1
     append_event(cwd, {"type": "wrong", "ref": ref, "why": args.why, "ts": time.time()})
     print(f"marked {ref} wrong: {args.why}")
     print("(this replaces hand-writing a WRONG row in the agent's MEMORY.md ledger table)")
+
+
+def cmd_ok(args, cwd):
+    rows = load_rows(cwd)
+    ref = resolve_ref(rows, args.agent_id)
+    if not ref:
+        print("no runs recorded in this project's ledger yet")
+        return 1
+    append_event(cwd, {"type": "ok", "ref": ref, "ts": time.time()})
+    print(f"marked {ref} ok (verified=true)")
 
 
 def cmd_off(args, cwd):
@@ -301,9 +392,12 @@ def main():
     p_why.add_argument("agent_type")
     p_why.add_argument("words", nargs="*")
 
-    p_wrong = sub.add_parser("wrong", help="mark a delegated run wrong")
+    p_wrong = sub.add_parser("wrong", help="mark a delegated run wrong (verified=false)")
     p_wrong.add_argument("agent_id", help="an agent_id from the ledger, or 'last'")
     p_wrong.add_argument("why")
+
+    p_ok = sub.add_parser("ok", help="mark a delegated run verified correct (verified=true)")
+    p_ok.add_argument("agent_id", help="an agent_id from the ledger, or 'last'")
 
     sub.add_parser("off", help="turn autoroute off (global switch)")
     sub.add_parser("on", help="turn autoroute on (global switch)")
@@ -319,6 +413,7 @@ def main():
         "stats": cmd_stats,
         "why": cmd_why,
         "wrong": cmd_wrong,
+        "ok": cmd_ok,
         "off": cmd_off,
         "on": cmd_on,
         "mark-retune": cmd_mark_retune,

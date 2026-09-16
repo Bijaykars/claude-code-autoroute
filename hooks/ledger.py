@@ -27,6 +27,21 @@ NEXT_RE = re.compile(r"(?m)^NEXT:\s*(.+?)\s*$")
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 
+def model_tier(model_id):
+    """claude-sonnet-5 -> sonnet, claude-opus-5 -> opus, etc. Unknown/empty ->
+    'unknown'. Used so pricing and per-model tables key on the same tier
+    names as BLENDED_PER_M, not the raw model id."""
+    if not model_id:
+        return "unknown"
+    m = model_id.lower()
+    for tier in ("haiku", "sonnet", "opus"):
+        if tier in m:
+            return tier
+    if "fable" in m or "mythos" in m:
+        return "fable"
+    return "unknown"
+
+
 def is_off():
     try:
         return (Path.home() / ".claude" / "autoroute" / "off").exists()
@@ -36,6 +51,15 @@ def is_off():
 
 def autoroute_dir(cwd):
     d = Path(cwd) / ".claude" / "autoroute"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def active_dir(cwd):
+    """One file per running agent (<agent_id>.json) instead of a single
+    active.json, so parallel SubagentStart/SubagentStop hooks never
+    read-modify-write the same file."""
+    d = autoroute_dir(cwd) / "active"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -61,6 +85,14 @@ def write_jsonl(path, items):
     with open(path, "w", encoding="utf-8") as f:
         for it in items:
             f.write(json.dumps(it) + "\n")
+
+
+def write_jsonl_atomic(path, items):
+    """Write-to-temp-then-os.replace so a pop that races another process's
+    read never leaves pending.jsonl half-written."""
+    tmp = path.with_name(path.name + f".tmp-{os.getpid()}-{time.time_ns()}")
+    write_jsonl(tmp, items)
+    os.replace(tmp, path)
 
 
 def append_jsonl(path, obj):
@@ -176,14 +208,11 @@ def handle_pretooluse(payload, cwd):
     append_jsonl(autoroute_dir(cwd) / "pending.jsonl", entry)
 
 
-def handle_subagentstart(payload, cwd):
-    agent_id = payload.get("agent_id")
-    if not agent_id:
-        return
-    session_id = payload.get("session_id")
-    agent_type = payload.get("agent_type")
-    d = autoroute_dir(cwd)
-    pending_path = d / "pending.jsonl"
+def pop_pending(pending_path, session_id, agent_type):
+    """Choose the oldest pending entry for the same session and subagent
+    type; fall back to the oldest entry for the same session. Rewrite the
+    file without the chosen line via write-to-temp-then-replace so a
+    concurrent reader never sees a partially written file."""
     pending = read_jsonl(pending_path)
 
     match_idx = None
@@ -196,12 +225,24 @@ def handle_subagentstart(payload, cwd):
             if p.get("session_id") == session_id:
                 match_idx = i
                 break
+    if match_idx is None:
+        return {}
 
-    matched = pending.pop(match_idx) if match_idx is not None else {}
-    write_jsonl(pending_path, pending)
+    matched = pending.pop(match_idx)
+    write_jsonl_atomic(pending_path, pending)
+    return matched
 
-    active = read_json(d / "active.json", {})
-    active[agent_id] = {
+
+def handle_subagentstart(payload, cwd):
+    agent_id = payload.get("agent_id")
+    if not agent_id:
+        return
+    session_id = payload.get("session_id")
+    agent_type = payload.get("agent_type")
+    d = autoroute_dir(cwd)
+    matched = pop_pending(d / "pending.jsonl", session_id, agent_type)
+
+    entry = {
         "ts": time.time(),
         "session_id": session_id,
         "subagent_type": agent_type,
@@ -209,7 +250,7 @@ def handle_subagentstart(payload, cwd):
         "model_override": matched.get("model_override"),
         "prompt_head": matched.get("prompt_head"),
     }
-    write_json(d / "active.json", active)
+    write_json(active_dir(cwd) / f"{agent_id}.json", entry)
 
 
 def handle_subagentstop(payload, cwd):
@@ -218,9 +259,17 @@ def handle_subagentstop(payload, cwd):
     session_id = payload.get("session_id")
     agent_type = payload.get("agent_type")
 
-    active = read_json(d / "active.json", {})
-    started = active.pop(agent_id, None) if agent_id else None
-    write_json(d / "active.json", active)
+    # No agent_id, or no matching start file (orphan stop): started stays
+    # None and the event below records duration=None, task=None rather than
+    # raising.
+    started = None
+    if agent_id:
+        active_path = active_dir(cwd) / f"{agent_id}.json"
+        started = read_json(active_path, None)
+        try:
+            active_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     transcript_path = payload.get("agent_transcript_path") or payload.get("transcript_path")
     model, tool_errors, tokens, transcript_last_text = parse_transcript(transcript_path)
@@ -236,6 +285,7 @@ def handle_subagentstop(payload, cwd):
     ts = time.time()
     start_ts = started.get("ts") if started else None
     duration_s = (ts - start_ts) if start_ts is not None else None
+    resolved_model = model or model_override
 
     event = {
         "type": "run",
@@ -245,10 +295,16 @@ def handle_subagentstop(payload, cwd):
         "agent_type": agent_type,
         "project": cwd,
         "task": started.get("description") if started else None,
-        "model": model or model_override,
+        "model": resolved_model,
+        "model_tier": model_tier(resolved_model),
         "configured_model": configured_model,
         "configured_effort": configured_effort,
         "outcome": outcome,
+        # `outcome == "resolved"` means the subagent finished without
+        # escalating -- it is NOT a correctness signal. `verified` stays
+        # null until a caller runs `autoroute.py wrong` (-> false) or
+        # `autoroute.py ok` (-> true) against this run's agent_id.
+        "verified": None,
         "next": next_line,
         "tool_errors": tool_errors,
         "duration_s": duration_s,
