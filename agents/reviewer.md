@@ -59,10 +59,11 @@ NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung on
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh).
-3. **next model** at medium effort: haiku → sonnet → opus. Never name opus from
-   haiku, and never name fable. The caller re-dispatches to exactly the rung
-   you name; it may not jump further.
+2. **effort up** at your current model (low → medium → high → xhigh → max).
+3. **next model** at medium effort: sonnet → opus. Haiku is never an
+   escalation target, only ever a starting rung. Never name opus before
+   sonnet's effort rungs are exhausted, and never name fable. The caller
+   re-dispatches to exactly the rung you name; it may not jump further.
 
 Escalate when the diff's correctness depends on invariants held elsewhere in
 the system that you cannot verify from the changed files alone. Say plainly

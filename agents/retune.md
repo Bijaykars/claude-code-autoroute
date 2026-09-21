@@ -15,19 +15,29 @@ Every agent sits at one rung. Effort moves before model, because effort is the
 cheaper knob:
 
 ```
-1  haiku  / low
-2  haiku  / medium
-3  haiku  / high
-4  sonnet / low
-5  sonnet / medium
-6  sonnet / high
-7  sonnet / xhigh
-8  opus   / high
-9  opus   / xhigh
+1  haiku                (no effort — Haiku 4.5 does not support the effort knob)
+2  sonnet / low
+3  sonnet / medium
+4  sonnet / high
+5  sonnet / xhigh
+6  opus   / medium
+7  opus   / high
+8  opus   / xhigh
+9  opus   / max
 ```
 
 Move **one rung per run**. Never jump two. Oscillation costs more than being
 one rung wrong for another week.
+
+Haiku is one rung, not three, because effort is unsupported there — an agent
+on haiku that needs more escalates straight to sonnet/low. There is no Fable
+rung: Fable prices double Opus per token for an essentially equal coding/design
+score, so nothing is ever promoted into it (the orchestrating session may be
+Fable; agents are not). There are no older-model rungs either — Opus 4.6/4.7/4.8,
+Sonnet 4.6, Fable 5 are each same-price-or-worse than the current model in
+their tier, and every extra model in rotation fragments the prompt cache.
+Effort moves before model because it's the cheaper knob and keeps the same
+cache.
 
 ## Which ledger is primary (v0.3)
 

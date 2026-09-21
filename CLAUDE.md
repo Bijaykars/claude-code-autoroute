@@ -51,6 +51,7 @@ Rules:
 - Independent agents launch in ONE message. Never redo a delegated search yourself.
 - `ESCALATE:` is re-dispatched to the rung the agent names in `NEXT:` and no higher: rescope first,
   then effort up at the same model, then the next model (haiku → sonnet → opus) at medium effort.
+  Haiku has no effort knob, so a haiku agent skips the effort step and names sonnet/low.
   Findings travel with it; never retried unchanged, never jumped straight to opus/fable.
 - A delegated result that proves WRONG (test fails, root cause disproven, edit redone) gets one row in
   that agent's ledger, `.claude/agent-memory/<agent>/MEMORY.md`: `| date | task shape | WRONG | model | why |`.
@@ -58,6 +59,13 @@ Rules:
 - Session banner says `RETUNE DUE` → launch `retune` in the background before other work. Every tier
   change is an experiment with a baseline; retune reverts it when the next window is not better.
 - Brief the hand-off completely: paths, exact change, done-check. A vague brief costs two round trips.
+
+**Only four models are ever routed to: Haiku, Sonnet, Opus, and the orchestrating session itself.**
+Older siblings (Opus 4.6/4.7/4.8, Sonnet 4.6, Fable 5) are same-price-or-worse than the current
+model in their tier and strictly less capable, so nothing is ever routed to them. Fable prices
+double Opus per token for an essentially equal coding/design score, so agents never run on it —
+Fable is a judgment seat, not a worker tier. Every extra model in rotation also fragments the
+prompt cache, which is its own cost on top of the sticker price.
 
 <!-- autoroute:end -->
 

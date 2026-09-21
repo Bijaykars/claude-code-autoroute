@@ -3,7 +3,6 @@ name: locate
 description: Finds where things live in a codebase — files, symbols, config keys, call sites, usages of a pattern. Use proactively whenever answering a question requires searching more than two or three files. Returns paths and line numbers, never file contents.
 tools: Read, Grep, Glob, Bash
 model: haiku
-effort: low
 memory: project
 ---
 
@@ -44,15 +43,14 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — why this tier cannot answer it>
 TRIED: <patterns, globs, and paths you actually covered>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | model:sonnet/low>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh).
-3. **next model** at medium effort: haiku → sonnet → opus. Never name opus from
-   haiku, and never name fable. The caller re-dispatches to exactly the rung
-   you name; it may not jump further.
+2. **next model**: `model:sonnet/low`. Haiku has no effort knob, so there is
+   no effort-up step at this tier. The caller re-dispatches to exactly the
+   rung you name; it may not jump further.
 
 Escalate when:
 - The target is described semantically rather than lexically ("where do we

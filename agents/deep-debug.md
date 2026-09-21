@@ -46,13 +46,19 @@ Return exactly this, as your entire response, when this tier is exhausted:
 ```
 ESCALATE: <one line — what remains unexplained>
 TRIED: <reproduction attempted, every hypothesis ruled out and the evidence that ruled it out>
-NEXT: model:opus/xhigh
+NEXT: model:opus/high
 ```
 
 Escalate only after you have a reproduction attempt AND a ruled-out list — opus
 re-runs this same agent with your `TRIED:` as its starting point, so a thin
-`TRIED:` just repeats your work at ten times the price. From opus there is
-nowhere further: return the dead end to the user.
+`TRIED:` just repeats your work at 2.5x the token price.
+
+This is the ladder's one deliberate multi-rung jump (sonnet/high is rung 4,
+opus/high is rung 7). A bug that survives a reproduction and a ruled-out list
+is the shape where model capability, not effort, is the binding constraint, so
+climbing sonnet/xhigh first mostly buys a second identical dead end. If
+opus/high also returns `ESCALATE`, one further step to opus/xhigh is allowed;
+after that, return the dead end to the user.
 
 ## Output
 

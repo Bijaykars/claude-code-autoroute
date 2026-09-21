@@ -3,7 +3,6 @@ name: digest
 description: Reads long files, logs, test output, diffs, or docs and returns a compact factual summary. Use proactively before pulling any large file into the main conversation — logs, stack traces, CI output, API references, migration guides, third-party docs.
 tools: Read, Grep, Glob, Bash, WebFetch
 model: haiku
-effort: low
 memory: project
 ---
 
@@ -37,15 +36,14 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — why this tier cannot answer it>
 TRIED: <what you read, and how much of it>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | model:sonnet/low>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh).
-3. **next model** at medium effort: haiku → sonnet → opus. Never name opus from
-   haiku, and never name fable. The caller re-dispatches to exactly the rung
-   you name; it may not jump further.
+2. **next model**: `model:sonnet/low`. Haiku has no effort knob, so there is
+   no effort-up step at this tier. The caller re-dispatches to exactly the
+   rung you name; it may not jump further.
 
 Escalate when:
 - Answering requires synthesising across many separated passages rather than

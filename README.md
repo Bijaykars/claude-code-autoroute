@@ -63,6 +63,15 @@ Common questions: [docs/faq.md](docs/faq.md).
 
 List prices per million tokens from the Claude API docs (2026-09-14): Fable 5.1 $10 in / $50 out, Opus 5 $5 / $25, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $9 / $3.60 / $1.80 per million, so Opus is half of Fable, Sonnet a fifth, Haiku a tenth.
 
+### Why only four models
+
+The ladder only ever routes to Haiku, Sonnet, or Opus, plus whichever model runs the orchestrating
+session. Older siblings are same price or dearer for less capability: Sonnet 4.6 lists at $3/$15,
+a third more than Sonnet 5's $2/$10, and the older Opus point releases price the same as Opus 5
+for no gain. Fable prices double Opus per token for an essentially equal coding and design score,
+so it is a judgment seat, not a worker an agent gets routed to. And prompt caches are scoped per
+model, so every extra model added to the rotation splits cache reuse and pays for it twice.
+
 The saving depends entirely on how much of a session is lookup and mechanical work versus judgment. An illustrative split for a typical coding session, 1M delegated tokens:
 
 | share of tokens | kind of work | runs on | blended $/M | cost |
