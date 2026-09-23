@@ -41,7 +41,7 @@ I'm not going to claim a controlled benchmark from one day on one project, but t
 | routed total | 2,673k | | $13.32 |
 | same tokens, all on Fable 5.1 | 2,673k | 18.00 | $48.12 |
 
-The routed total came to 28% of the all-top-model price for the same tokens. The caveats matter as much as the number: this excludes the orchestrating session's own tokens, the dollar figures are estimated from reported totals at an assumed 80/20 input/output split rather than real input/output/cache accounting, and it is one day on one project with one operator. Treat it as an order of magnitude, not a benchmark.
+The routed total came to 28% of the all-top-model price for the same tokens. The caveats matter as much as the number: this excludes the orchestrating session's own tokens, the dollar figures are estimated from reported totals at an assumed 80/20 input/output split rather than real input/output/cache accounting, and it is one day on one project with one operator. Treat it as an order of magnitude, not a benchmark. The Opus row was measured on Opus 5 before Opus 5.5 shipped (2026-09-22); the same UI work would cost less on Opus 5.5, so $2.48 is a floor on the saving, not a current quote.
 
 ## What did not work, the first time
 

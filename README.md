@@ -61,16 +61,18 @@ Common questions: [docs/faq.md](docs/faq.md).
 
 ### Cost, in theory
 
-List prices per million tokens from the Claude API docs (2026-09-14): Fable 5.1 $10 in / $50 out, Opus 5 $5 / $25, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $9 / $3.60 / $1.80 per million, so Opus is half of Fable, Sonnet a fifth, Haiku a tenth.
+List prices per million tokens from the Claude API docs (2026-09-23): Fable 5.1 $10 in / $50 out, Opus 5.5 $4 / $20, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $7.20 / $3.60 / $1.80 per million, so Opus is now about 40% of Fable, Sonnet a fifth, Haiku a tenth.
 
 ### Why only four models
 
 The ladder only ever routes to Haiku, Sonnet, or Opus, plus whichever model runs the orchestrating
 session. Older siblings are same price or dearer for less capability: Sonnet 4.6 lists at $3/$15,
-a third more than Sonnet 5's $2/$10, and the older Opus point releases price the same as Opus 5
-for no gain. Fable prices double Opus per token for an essentially equal coding and design score,
-so it is a judgment seat, not a worker an agent gets routed to. And prompt caches are scoped per
-model, so every extra model added to the rotation splits cache reuse and pays for it twice.
+a third more than Sonnet 5's $2/$10, and Opus 5 itself is now legacy, priced at $5/$25 against
+Opus 5.5's $4/$20 for less capability — the same trap as the 4.x releases. Fable prices double Opus
+per token for an essentially equal coding and design score, so it is a judgment seat, not a worker
+an agent gets routed to. And prompt caches are scoped per model, so every extra model added to the
+rotation splits cache reuse and pays for it twice; Opus 5.5 cache reads are 5% of base input rather
+than the usual 10%, which makes staying on one model pay off a little more.
 
 The saving depends entirely on how much of a session is lookup and mechanical work versus judgment. An illustrative split for a typical coding session, 1M delegated tokens:
 
@@ -78,9 +80,9 @@ The saving depends entirely on how much of a session is lookup and mechanical wo
 |---|---|---|---|---|
 | 30% | searching, reading logs and docs | Haiku | 1.80 | $0.54 |
 | 50% | specified edits, tests, review, scripts | Sonnet | 3.60 | $1.80 |
-| 15% | UI and design | Opus | 9.00 | $1.35 |
+| 15% | UI and design | Opus | 7.20 | $1.08 |
 | 5% | judgment, verdicts | Fable | 18.00 | $0.90 |
-| **100%** | | **routed** | | **$4.59** |
+| **100%** | | **routed** | | **$4.32** |
 | 100% | everything on the top model | Fable | 18.00 | $18.00 |
 
 Under that split the delegated work costs about a quarter of the all-top-model price. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model. Subscription usage is a different accounting from API cost; keep them separate.
@@ -100,7 +102,7 @@ One session on the author's own project (a Node/Express trading-signals codebase
 
 The delegated work cost 28% of what the same tokens would have cost on the top model. The split that day was 17% Haiku, 65% Sonnet, 10% Opus, 8% Fable by tokens, so it was heavier on Sonnet than the illustrative split above and lighter on lookups.
 
-What it excludes: the orchestrating session's own tokens (the part the top model was actually paid for), prompt-cache discounts, retries, and the possibility that a stronger model would have finished some tasks in fewer tokens. One day, one project, one operator. It is the order of magnitude, not a benchmark; the reproducible comparison is on the roadmap.
+What it excludes: the orchestrating session's own tokens (the part the top model was actually paid for), prompt-cache discounts, retries, and the possibility that a stronger model would have finished some tasks in fewer tokens. One day, one project, one operator. It is the order of magnitude, not a benchmark; the reproducible comparison is on the roadmap. This measurement predates Opus 5.5 (released 2026-09-22); the same UI work would cost less today, so the $2.48 figure is a floor on the saving, not a current quote.
 
 ## What is inside
 

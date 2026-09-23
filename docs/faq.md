@@ -16,7 +16,7 @@ On API billing, the delegated work is priced at the cheaper tier's rate; the REA
 
 ## Which Claude models does it use?
 
-Haiku 4.5, Sonnet 5, Opus 5, with Fable 5.1 or Opus as the orchestrator. Tiers are names in frontmatter, not hardcoded model IDs, so they follow whatever the current generation is.
+Haiku 4.5, Sonnet 5, Opus 5.5, with Fable 5.1 or Opus as the orchestrator. Tiers are names in frontmatter, not hardcoded model IDs, so they follow whatever the current generation is.
 
 ## What is the self-tuning, and can it make things worse?
 

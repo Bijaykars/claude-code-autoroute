@@ -25,12 +25,13 @@ Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
 - cause unknown after the cheap path failed → `deep-debug` (sonnet); re-run it with `model: opus`
   only when its own `ESCALATE:` says sonnet is exhausted
 - ad-hoc `Agent` calls: `model: haiku` for lookups ONLY, `sonnet` for any edit, `opus`/`fable` only for judgment
-- **UI design and layout work runs on Opus 5** — anything that needs visual judgment: new components,
+- **UI design and layout work runs on Opus 5.5** — anything that needs visual judgment: new components,
   layout, theming, unfamiliar interfaces. A label change, a one-line frontend fix or a mechanical edit
   with complete context stays inline or goes to `scaffold`. Evidence 2026-09-14: Design Arena Elo Opus 5
   1320 ≈ Fable 5.1 1321 at half the price, Sonnet 5 1289 and "third-best, occasionally careless" in
-  build-offs. Sonnet keeps backend, tests and research scripts. Fable only for judgment and long
-  autonomous runs.
+  build-offs. As of 2026-09-22, Opus 5.5 replaces Opus 5 at $4/$20 against Fable's $10/$50, with
+  Anthropic claiming parity with Fable 5.1 on most work. Sonnet keeps backend, tests and research
+  scripts. Fable only for judgment and long autonomous runs.
 - **Haiku never edits code.** The only exception is a brief that names the file, the exact old text and the exact new
   text — a find-and-replace, not a task. Anything needing a decision about the code goes to sonnet or above.
 
