@@ -61,18 +61,18 @@ Common questions: [docs/faq.md](docs/faq.md).
 
 ### Cost, in theory
 
-List prices per million tokens from the Claude API docs (2026-09-23): Fable 5.1 $10 in / $50 out, Opus 5.5 $4 / $20, Sonnet 5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $7.20 / $3.60 / $1.80 per million, so Opus is now about 40% of Fable, Sonnet a fifth, Haiku a tenth.
+List prices per million tokens from the Claude API docs (2026-09-29): Fable 5.1 $10 in / $50 out, Opus 5.5 $4 / $20, Sonnet 5.5 $2 / $10, Haiku 4.5 $1 / $5. At an 80/20 input/output mix that is a blended $18 / $7.20 / $3.60 / $1.80 per million, so Opus is now about 40% of Fable, Sonnet a fifth, Haiku a tenth. Sonnet 5.5 (2026-09-28) held Sonnet 5's price, while Anthropic claims up to 30% lower cost per task from fewer tokens, so the Sonnet tier may be cheaper in practice without the table changing.
 
 ### Why only four models
 
 The ladder only ever routes to Haiku, Sonnet, or Opus, plus whichever model runs the orchestrating
 session. Older siblings are same price or dearer for less capability: Sonnet 4.6 lists at $3/$15,
-a third more than Sonnet 5's $2/$10, and Opus 5 itself is now legacy, priced at $5/$25 against
-Opus 5.5's $4/$20 for less capability — the same trap as the 4.x releases. Fable prices double Opus
+50% more than Sonnet 5.5's $2/$10, and Opus 5 itself is now legacy, priced at $5/$25 against
+Opus 5.5's $4/$20 for less capability — the same trap as the 4.x releases. Sonnet 5 is likewise legacy at exactly Sonnet 5.5's price, so it is dominated on age alone rather than on price. Fable prices double Opus
 per token for an essentially equal coding and design score, so it is a judgment seat, not a worker
 an agent gets routed to. And prompt caches are scoped per model, so every extra model added to the
 rotation splits cache reuse and pays for it twice; Opus 5.5 cache reads are 5% of base input rather
-than the usual 10%, which makes staying on one model pay off a little more.
+than the usual 10%, which makes staying on one model pay off a little more. On Claude Platform on AWS, Amazon Bedrock, Google Cloud and Microsoft Foundry the `sonnet` alias resolves to an older Sonnet (4.6 or 4.5), and on Microsoft Foundry `opus` also resolves to Opus 4.6, so users there should pin full model IDs; see [docs/faq.md](docs/faq.md).
 
 The saving depends entirely on how much of a session is lookup and mechanical work versus judgment. An illustrative split for a typical coding session, 1M delegated tokens:
 
@@ -98,11 +98,11 @@ One session on the author's own project (a Node/Express trading-signals codebase
 | Opus 5 (UI work) | 275k | 9.00 | $2.48 |
 | Fable 5.1 (web research, docs lookup) | 211k | 18.00 | $3.80 |
 | **routed total** | **2,673k** | | **$13.32** |
-| same tokens, all on Fable 5.1 | 2,673k | 18.00 | $48.12 |
+| same tokens, all on Fable 5.1 | 2,673k | 18.00 | $48.11 |
 
 The delegated work cost 28% of what the same tokens would have cost on the top model. The split that day was 17% Haiku, 65% Sonnet, 10% Opus, 8% Fable by tokens, so it was heavier on Sonnet than the illustrative split above and lighter on lookups.
 
-What it excludes: the orchestrating session's own tokens (the part the top model was actually paid for), prompt-cache discounts, retries, and the possibility that a stronger model would have finished some tasks in fewer tokens. One day, one project, one operator. It is the order of magnitude, not a benchmark; the reproducible comparison is on the roadmap. This measurement predates Opus 5.5 (released 2026-09-22); the same UI work would cost less today, so the $2.48 figure is a floor on the saving, not a current quote.
+What it excludes: the orchestrating session's own tokens (the part the top model was actually paid for), prompt-cache discounts, retries, and the possibility that a stronger model would have finished some tasks in fewer tokens. One day, one project, one operator. It is the order of magnitude, not a benchmark; the reproducible comparison is on the roadmap. This measurement predates Opus 5.5 (released 2026-09-22); the same UI work would cost less today, so the $2.48 figure is a floor on the saving, not a current quote. It also predates Sonnet 5.5 (2026-09-28), and since Sonnet carried 65% of that day's routed tokens, Anthropic's claimed cost-per-task reduction, if it holds on this workload, would lower the routed figure further.
 
 ## What is inside
 

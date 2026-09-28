@@ -29,7 +29,9 @@ Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
   layout, theming, unfamiliar interfaces. A label change, a one-line frontend fix or a mechanical edit
   with complete context stays inline or goes to `scaffold`. Evidence 2026-09-14: Design Arena Elo Opus 5
   1320 ≈ Fable 5.1 1321 at half the price, Sonnet 5 1289 and "third-best, occasionally careless" in
-  build-offs. As of 2026-09-22, Opus 5.5 replaces Opus 5 at $4/$20 against Fable's $10/$50, with
+  build-offs. Caveat: those Design Arena figures were measured against Sonnet 5; Sonnet 5.5 (2026-09-28)
+  has not been re-measured on design, so the Opus-over-Sonnet call for UI now rests on older evidence
+  than it did. As of 2026-09-22, Opus 5.5 replaces Opus 5 at $4/$20 against Fable's $10/$50, with
   Anthropic claiming parity with Fable 5.1 on most work. Sonnet keeps backend, tests and research
   scripts. Fable only for judgment and long autonomous runs.
 - **Haiku never edits code.** The only exception is a brief that names the file, the exact old text and the exact new

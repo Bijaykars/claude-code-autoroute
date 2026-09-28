@@ -34,7 +34,7 @@ on haiku that needs more escalates straight to sonnet/low. There is no Fable
 rung: Fable prices double Opus per token for an essentially equal coding/design
 score, so nothing is ever promoted into it (the orchestrating session may be
 Fable; agents are not). There are no older-model rungs either — Opus 4.6/4.7/4.8,
-Sonnet 4.6, Fable 5 are each same-price-or-worse than the current model in
+Opus 5, Sonnet 4.6, Sonnet 5, Fable 5 are each same-price-or-worse than the current model in
 their tier, and every extra model in rotation fragments the prompt cache.
 Effort moves before model because it's the cheaper knob and keeps the same
 cache.

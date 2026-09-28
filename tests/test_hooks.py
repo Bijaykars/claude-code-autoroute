@@ -616,5 +616,15 @@ class AutorouteCliTests(unittest.TestCase):
             self.assertEqual(last["agent"], "implement")
 
 
+class BlendedRateTests(unittest.TestCase):
+    def test_blended_per_m_matches_current_list_prices(self):
+        sys.path.insert(0, str(REPO))
+        import autoroute
+        self.assertEqual(
+            autoroute.BLENDED_PER_M,
+            {"haiku": 1.80, "sonnet": 3.60, "opus": 7.20, "fable": 18.00},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

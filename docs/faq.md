@@ -16,7 +16,16 @@ On API billing, the delegated work is priced at the cheaper tier's rate; the REA
 
 ## Which Claude models does it use?
 
-Haiku 4.5, Sonnet 5, Opus 5.5, with Fable 5.1 or Opus as the orchestrator. Tiers are names in frontmatter, not hardcoded model IDs, so they follow whatever the current generation is.
+Haiku 4.5, Sonnet 5.5, Opus 5.5, with Fable 5.1 or Opus as the orchestrator. Tiers are alias names in frontmatter (`haiku`, `sonnet`; `opus` only as a per-call override), not hardcoded model IDs. On the Anthropic API the aliases track the current generation, but on other providers they resolve to older models (checked against the Claude Code model-config docs on 2026-09-29):
+
+| provider | `opus` | `sonnet` |
+|---|---|---|
+| Anthropic API | Opus 5.5 | Sonnet 5.5 |
+| Claude Platform on AWS | Opus 5.5 | Sonnet 4.6 |
+| Amazon Bedrock, Google Cloud | Opus 5.5 | Sonnet 4.5 |
+| Microsoft Foundry | Opus 4.6 | Sonnet 4.5 |
+
+`fable` and `haiku` resolve to the latest Fable 5.1 and Haiku everywhere. So a Claude Platform on AWS, Bedrock, Google Cloud or Foundry user gets Sonnet 4.6 or 4.5 on the Sonnet rung, which lists at $3/$15 against Sonnet 5.5's $2/$10 (about 50% more per token) for an older model. The fix is to pin full model IDs such as `claude-sonnet-5-5` in the `model:` field of the agent frontmatter, which Claude Code accepts. Pin in this repo's `agents/*.md` before running `install.py`, or in a project-level `.claude/agents/` override, because `install.py` overwrites every `~/.claude/agents/*.md` on each run (keeping only a `.bak`), so a pin written into the installed copy is lost on the next install. A `retune` model-rung move also writes the alias back into `model:`, because its ladder is written in alias names, so re-check a pinned agent after a retune.
 
 ## What is the self-tuning, and can it make things worse?
 
