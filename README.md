@@ -1,6 +1,6 @@
 # AutoRoute for Claude Code
 
-<p align="center"><img src="docs/autoroute.png" alt="AutoRoute for Claude Code: the main session plans and decides, Haiku does file searches and summaries, Sonnet does implementation and tests, Opus takes hard debugging and UI work when Sonnet escalates; observed outcomes (tokens, duration, escalations) feed a retune step that keeps changes that help and reverts those that do not" width="560"></p>
+<p align="center"><img src="docs/autoroute.png" alt="AutoRoute for Claude Code: the main session plans and decides, Haiku does file searches and summaries, Sonnet does implementation and tests, Opus takes hard debugging when Sonnet escalates, Fable designs the UI; observed outcomes (tokens, duration, escalations) feed a retune step that keeps changes that help and reverts those that do not" width="560"></p>
 
 AutoRoute is Claude Code model routing built on Claude Code subagents, spreading work across Haiku, Sonnet, and Opus with failure tracking and experimental self-tuning.
 
@@ -8,7 +8,7 @@ Running everything on the top model means it also does your file searches, log r
 
 ## What it does
 
-- **Routes by tier.** The session reads which model it is and hands work down: Haiku finds and reads, Sonnet implements, tests and reviews, Opus does UI, the top model only decides.
+- **Routes by tier.** The session reads which model it is and hands work down: Haiku finds and reads, Sonnet implements and tests, Opus reviews and debugs, Fable designs UI (`ui-designer`), the top model otherwise only decides.
 - **Escalates one rung at a time.** An agent that cannot deliver returns a fixed `ESCALATE` block naming the next rung. Nothing jumps straight to the top model.
 - **Records failures.** Every agent logs a ledger row, and the caller logs a `WRONG` row when a delegated answer proves wrong.
 - **Tunes itself, and reverts.** A `retune` agent moves tiers one rung at a time from those ledgers, then verifies its own last move against its baseline.
@@ -47,7 +47,8 @@ Small, self-contained tasks with complete context stay in the main session; star
 | one small change with complete context | finish in the current session |
 | file discovery or factual extraction | `locate` / `digest` |
 | clearly specified implementation | `implement` / `scaffold` |
-| ambiguous design or hard debugging | opus (via `model: opus`) |
+| UI / UX design or redesign | ui-designer (Fable 5.1) |
+| hard debugging or ambiguous architecture | opus (via `model: opus`) |
 
 See [docs/escalation.md](docs/escalation.md) for the escalation contract and [docs/self-tuning.md](docs/self-tuning.md) for the ledger, thresholds and rollback.
 Common questions: [docs/faq.md](docs/faq.md).
@@ -65,14 +66,16 @@ List prices per million tokens from the Claude API docs (2026-09-29): Fable 5.1 
 
 ### Why only four models
 
-The ladder only ever routes to Haiku, Sonnet, or Opus, plus whichever model runs the orchestrating
+The ladder only ever routes to Haiku, Sonnet, or Opus, plus Fable for `ui-designer` and whichever model runs the orchestrating
 session. Older siblings are same price or dearer for less capability: Sonnet 4.6 lists at $3/$15,
 50% more than Sonnet 5.5's $2/$10, and Opus 5 itself is now legacy, priced at $5/$25 against
-Opus 5.5's $4/$20 for less capability — the same trap as the 4.x releases. Sonnet 5 is likewise legacy at exactly Sonnet 5.5's price, so it is dominated on age alone rather than on price. Fable prices double Opus
+Opus 5.5's $4/$20 for less capability — the same trap as the 4.x releases. Sonnet 5 is likewise legacy at exactly Sonnet 5.5's price, so it is dominated on age alone rather than on price. Fable prices 2.5x Opus
 per token for an essentially equal coding and design score, so it is a judgment seat, not a worker
-an agent gets routed to. And prompt caches are scoped per model, so every extra model added to the
+an agent gets routed to. The exception is `ui-designer`, which runs on Fable 5.1 by the author's preference; Design Arena's Website category currently puts Opus 5.5 ahead, so change its `model:` to `opus` for the cheaper default. And prompt caches are scoped per model, so every extra model added to the
 rotation splits cache reuse and pays for it twice; Opus 5.5 cache reads are 5% of base input rather
 than the usual 10%, which makes staying on one model pay off a little more. On Claude Platform on AWS, Amazon Bedrock, Google Cloud and Microsoft Foundry the `sonnet` alias resolves to an older Sonnet (4.6 or 4.5), and on Microsoft Foundry `opus` also resolves to Opus 4.6, so users there should pin full model IDs; see [docs/faq.md](docs/faq.md).
+
+**Effort matters more than model on 5.5.** Artificial Analysis (2026-09, independent) measured Sonnet 5.5 at xhigh at $2.74 per task for 52 points, while Opus 5.5 at high costs $1.82 for 54. Past high, the cheaper Sonnet tier is therefore the dearer choice, which is why a Sonnet agent's effort stops at high and its next step is Opus at medium. This is an independent measurement on a general intelligence index, not a coding-only benchmark.
 
 The saving depends entirely on how much of a session is lookup and mechanical work versus judgment. An illustrative split for a typical coding session, 1M delegated tokens:
 
@@ -80,12 +83,12 @@ The saving depends entirely on how much of a session is lookup and mechanical wo
 |---|---|---|---|---|
 | 30% | searching, reading logs and docs | Haiku | 1.80 | $0.54 |
 | 50% | specified edits, tests, review, scripts | Sonnet | 3.60 | $1.80 |
-| 15% | UI and design | Opus | 7.20 | $1.08 |
+| 15% | UI and design | Fable | 18.00 | $2.70 |
 | 5% | judgment, verdicts | Fable | 18.00 | $0.90 |
-| **100%** | | **routed** | | **$4.32** |
+| **100%** | | **routed** | | **$5.94** |
 | 100% | everything on the top model | Fable | 18.00 | $18.00 |
 
-Under that split the delegated work costs about a quarter of the all-top-model price. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model. Subscription usage is a different accounting from API cost; keep them separate.
+Under that split the delegated work costs about a third of the all-top-model price. Most of the gap is the UI row: with `ui-designer` switched to `model: opus`, the same split costs $4.32, about a quarter. Move the split toward judgment and the saving shrinks; move it toward lookups and it grows. Measure your own split from the ledgers before quoting a number, and remember the orchestrating session itself still runs on the top model. Subscription usage is a different accounting from API cost; keep them separate.
 
 ### Estimated API cost from reported token usage, one working day
 
@@ -110,7 +113,10 @@ What it excludes: the orchestrating session's own tokens (the part the top model
 |---|---|
 | `CLAUDE.md` | Global rules: cost routing, token discipline, think-before-coding, the ladder, surgical changes, goal-driven execution |
 | `agents/locate.md`, `agents/digest.md` | Haiku. Find and read only. |
-| `agents/scaffold.md`, `agents/implement.md`, `agents/test-writer.md`, `agents/reviewer.md` | Sonnet. Mechanical edits, implementation, tests, review. |
+| `agents/scaffold.md`, `agents/implement.md`, `agents/test-writer.md` | Sonnet. Mechanical edits, implementation, tests. |
+| `agents/reviewer.md` | Opus 5.5 at high effort. Review. |
+| `agents/ui-designer.md` | Fable 5.1. UI and UX design; proves a pattern once and hands repetition to scaffold. |
+| `agents/researcher.md` | Opus 5.5 at medium effort. Sourced web and docs research; replaces ad-hoc general-purpose calls, which inherit the session's effort. |
 | `agents/deep-debug.md` | Sonnet first; escalates itself to Opus after a reproduction attempt. |
 | `agents/retune.md` | Re-tiers agents from their ledgers, then verifies or reverts its own last move. |
 | `hooks/retune-due.py` | SessionStart. Flags when an agent has enough ledger rows to retune. |

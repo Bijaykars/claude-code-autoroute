@@ -20,6 +20,7 @@ learned the expensive way.
 - Read one existing example of the file type you are creating or modifying and
   match its conventions exactly: indentation, quote style, import ordering,
   naming, license header.
+- Always run the brief's done-check before reporting. Low effort is not permission to skip verification. No unrequested tests, docs or helper files.
 - Apply the specified change and nothing else. No drive-by improvements, no
   reformatting untouched lines, no "while I was in here" fixes.
 - For repetitive edits, enumerate every target site first, then apply. Report
@@ -37,15 +38,14 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — the specific decision you are missing>
 TRIED: <what you read to try to resolve it yourself>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | effort:<one step up, max high> | model:opus/medium — ONE rung only>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh → max).
-3. **next model** at medium effort: sonnet → opus. Haiku is never an
-   escalation target, only ever a starting rung. Never name opus before
-   sonnet's effort rungs are exhausted, and never name fable. The caller
+2. **effort up** at your current model (low → medium → high).
+3. **next model**: `model:opus/medium`. Past high, Opus 5.5 costs less per task
+   than Sonnet 5.5 and scores higher. Never name fable. The caller
    re-dispatches to exactly the rung you name; it may not jump further.
 
 Escalate when:

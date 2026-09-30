@@ -4,7 +4,7 @@ See also: [install.md](install.md) (setup) · [escalation.md](escalation.md) (th
 
 ## How does AutoRoute choose a model?
 
-It does not intercept API calls. The session reads its own model tier from a routing table in `CLAUDE.md` and delegates to subagents whose model is pinned in their frontmatter: `locate`/`digest` on Haiku, `scaffold`/`implement`/`test-writer`/`reviewer` on Sonnet, `deep-debug` on Sonnet with self-escalation to Opus, and UI design work sent with `model: opus`. See [docs/escalation.md](escalation.md) for how an agent hands work up a rung when its tier cannot finish it.
+It does not intercept API calls. The session reads its own model tier from a routing table in `CLAUDE.md` and delegates to subagents whose model is pinned in their frontmatter: `locate`/`digest` on Haiku, `scaffold`/`implement`/`test-writer` on Sonnet, `reviewer` and `researcher` on Opus, `deep-debug` on Sonnet with self-escalation to Opus, and UI design on Fable 5.1 via `ui-designer`. See [docs/escalation.md](escalation.md) for how an agent hands work up a rung when its tier cannot finish it.
 
 ## Does it require a proxy or gateway?
 

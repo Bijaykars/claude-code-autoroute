@@ -32,6 +32,7 @@ previous run has already closed.
 
 ## Rules
 
+- Do only what the brief asks. No unrequested tests, docs or helper files, and no extra review or verification rounds beyond the brief's done-check.
 - Do not propose a fix until the mechanism is proven.
 - Distinguish what you verified from what you inferred. Label them.
 - Say explicitly when evidence is insufficient. "I could not determine the
@@ -54,9 +55,9 @@ re-runs this same agent with your `TRIED:` as its starting point, so a thin
 `TRIED:` just repeats your work at 2.5x the token price.
 
 This is the ladder's one deliberate multi-rung jump (sonnet/high is rung 4,
-opus/high is rung 7). A bug that survives a reproduction and a ruled-out list
+opus/high is rung 6). A bug that survives a reproduction and a ruled-out list
 is the shape where model capability, not effort, is the binding constraint, so
-climbing sonnet/xhigh first mostly buys a second identical dead end. If
+climbing to opus/medium first mostly buys a second identical dead end. If
 opus/high also returns `ESCALATE`, one further step to opus/xhigh is allowed;
 after that, return the dead end to the user.
 

@@ -21,21 +21,26 @@ Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
 - long file, log, diff, test output, docs → `digest` (haiku)
 - repetitive or mechanical edits, boilerplate, renames → `scaffold` (sonnet, low effort)
 - approach decided, write the code → `implement` (sonnet)
-- tests → `test-writer` (sonnet) · review before saying "done" → `reviewer` (sonnet)
+- tests → `test-writer` (sonnet) · review before saying "done" → `reviewer` (opus, high)
+- research, docs, benchmarks, prices, release notes → `researcher` (opus, medium). Prefer it over an ad-hoc
+  general-purpose call: named agents pin their effort, general-purpose inherits the session's.
+- UI design, redesign, restyle, UX → `ui-designer` (Fable 5.1). Brief it with the files already found by
+  locate/digest; it designs and proves the pattern once, and repeating that pattern across more files
+  goes to scaffold.
 - cause unknown after the cheap path failed → `deep-debug` (sonnet); re-run it with `model: opus`
   only when its own `ESCALATE:` says sonnet is exhausted
 - ad-hoc `Agent` calls: `model: haiku` for lookups ONLY, `sonnet` for any edit, `opus`/`fable` only for judgment
-- **UI design and layout work runs on Opus 5.5** — anything that needs visual judgment: new components,
-  layout, theming, unfamiliar interfaces. A label change, a one-line frontend fix or a mechanical edit
-  with complete context stays inline or goes to `scaffold`. Evidence 2026-09-14: Design Arena Elo Opus 5
-  1320 ≈ Fable 5.1 1321 at half the price, Sonnet 5 1289 and "third-best, occasionally careless" in
-  build-offs. Caveat: those Design Arena figures were measured against Sonnet 5; Sonnet 5.5 (2026-09-28)
-  has not been re-measured on design, so the Opus-over-Sonnet call for UI now rests on older evidence
-  than it did. As of 2026-09-22, Opus 5.5 replaces Opus 5 at $4/$20 against Fable's $10/$50, with
-  Anthropic claiming parity with Fable 5.1 on most work. Sonnet keeps backend, tests and research
-  scripts. Fable only for judgment and long autonomous runs.
+- **UI and UX design runs on Fable 5.1, by the owner's choice** — new components, layout, theming,
+  redesigns, unfamiliar interfaces. A label change, a one-line frontend fix or a mechanical edit with
+  complete context stays inline or goes to `scaffold`. Evidence 2026-09-29 (Design Arena): the Website
+  category ranks Opus 5.5 1361 and Fable 5.1 1319, but Fable 5.1 is #1 in Fullstack and Web Apps on
+  about five times the votes. The owner prefers Fable 5.1's design output, and that decides. Opus 5.5
+  is the cheaper alternative. Sonnet keeps backend, tests and research scripts.
 - **Haiku never edits code.** The only exception is a brief that names the file, the exact old text and the exact new
   text — a find-and-replace, not a task. Anything needing a decision about the code goes to sonnet or above.
+- **Effort is the main token lever on 5.5 models.** They think more per turn than their predecessors at
+  the same effort. Never set xhigh or max without a measured quality gain. Sonnet stops at high: beyond
+  it, Opus 5.5 at medium or high costs less per task and scores higher (Artificial Analysis, 2026-09).
 
 ### Route by difficulty
 
@@ -44,7 +49,8 @@ Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
 | one small change with complete context | finish in the current session |
 | file discovery or factual extraction | `locate` / `digest` |
 | clearly specified implementation | `implement` / `scaffold` |
-| ambiguous design or hard debugging | opus (via `model: opus`) |
+| UI / UX design or redesign | `ui-designer` (Fable 5.1) |
+| hard debugging or ambiguous architecture | opus (via `model: opus`) |
 
 The objective is the lowest total cost per successfully completed task, including delegation overhead
 and retries — not the cheapest model per call.
@@ -63,12 +69,12 @@ Rules:
   change is an experiment with a baseline; retune reverts it when the next window is not better.
 - Brief the hand-off completely: paths, exact change, done-check. A vague brief costs two round trips.
 
-**Only four models are ever routed to: Haiku, Sonnet, Opus, and the orchestrating session itself.**
+**Only four models are ever routed to: Haiku 4.5, Sonnet 5.5, Opus 5.5, and Fable 5.1 (`ui-designer` only).**
 Older siblings (Opus 4.6/4.7/4.8, Sonnet 4.6, Fable 5) are same-price-or-worse than the current
 model in their tier and strictly less capable, so nothing is ever routed to them. Fable prices
-double Opus per token for an essentially equal coding/design score, so agents never run on it —
-Fable is a judgment seat, not a worker tier. Every extra model in rotation also fragments the
-prompt cache, which is its own cost on top of the sticker price.
+2.5x Opus per token for an essentially equal coding/design score, so worker agents do not run on it.
+Fable is a judgment seat, not a worker tier; the one exception is `ui-designer`, which runs on Fable 5.1 by the owner's choice.
+Every extra model in rotation also fragments the prompt cache, which is its own cost on top of the sticker price.
 
 <!-- autoroute:end -->
 

@@ -28,6 +28,7 @@ conventions, known-flaky tests. Use it instead of rediscovering it.
 
 ## Rules
 
+- Write only the tests the brief asks for. No unrequested docs or helper files, and no extra review rounds beyond running the tests.
 - No mocking of the thing under test.
 - No assertions on implementation details a valid refactor would break.
 - No snapshot tests unless the repo already uses them.
@@ -44,15 +45,14 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — why the test cannot be written at this tier>
 TRIED: <what you attempted>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | effort:<one step up, max high> | model:opus/medium — ONE rung only>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh → max).
-3. **next model** at medium effort: sonnet → opus. Haiku is never an
-   escalation target, only ever a starting rung. Never name opus before
-   sonnet's effort rungs are exhausted, and never name fable. The caller
+2. **effort up** at your current model (low → medium → high).
+3. **next model**: `model:opus/medium`. Past high, Opus 5.5 costs less per task
+   than Sonnet 5.5 and scores higher. Never name fable. The caller
    re-dispatches to exactly the rung you name; it may not jump further.
 
 Escalate when:

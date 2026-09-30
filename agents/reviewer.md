@@ -2,8 +2,8 @@
 name: reviewer
 description: Reviews a diff or a set of changed files for correctness, security, and convention fit. Use proactively after any non-trivial code change, and before committing.
 tools: Read, Grep, Glob, Bash
-model: sonnet
-effort: xhigh
+model: opus
+effort: high
 memory: project
 ---
 
@@ -54,15 +54,13 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — what you could not evaluate>
 TRIED: <what you reviewed>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | effort:<one step up>>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh → max).
-3. **next model** at medium effort: sonnet → opus. Haiku is never an
-   escalation target, only ever a starting rung. Never name opus before
-   sonnet's effort rungs are exhausted, and never name fable. The caller
+2. **effort up** at your current model (high → xhigh → max). Opus is the top
+   worker model, so there is no next-model step. Never name fable. The caller
    re-dispatches to exactly the rung you name; it may not jump further.
 
 Escalate when the diff's correctness depends on invariants held elsewhere in

@@ -15,29 +15,30 @@ Every agent sits at one rung. Effort moves before model, because effort is the
 cheaper knob:
 
 ```
-1  haiku                (no effort — Haiku 4.5 does not support the effort knob)
+1  haiku                (no effort — Haiku 4.5 does not support it)
 2  sonnet / low
 3  sonnet / medium
 4  sonnet / high
-5  sonnet / xhigh
-6  opus   / medium
-7  opus   / high
-8  opus   / xhigh
-9  opus   / max
+5  opus   / medium
+6  opus   / high
+7  opus   / xhigh
+8  opus   / max
 ```
 
 Move **one rung per run**. Never jump two. Oscillation costs more than being
 one rung wrong for another week.
 
-Haiku is one rung, not three, because effort is unsupported there — an agent
-on haiku that needs more escalates straight to sonnet/low. There is no Fable
-rung: Fable prices double Opus per token for an essentially equal coding/design
-score, so nothing is ever promoted into it (the orchestrating session may be
-Fable; agents are not). There are no older-model rungs either — Opus 4.6/4.7/4.8,
-Opus 5, Sonnet 4.6, Sonnet 5, Fable 5 are each same-price-or-worse than the current model in
-their tier, and every extra model in rotation fragments the prompt cache.
-Effort moves before model because it's the cheaper knob and keeps the same
-cache.
+Rungs are ordered by measured cost per task (Artificial Analysis, 2026-09), not
+by model name. Sonnet 5.5 xhigh and max are not rungs: Opus 5.5 at high costs
+less per task than Sonnet 5.5 at xhigh and scores higher, and Anthropic reports
+that Sonnet 5.5 at xhigh starts its own review rounds. A Sonnet agent's effort
+stops at high; its next step is opus/medium. Sonnet 5.5 at medium and Opus 5.5
+at low measure about the same (41 vs 42 points, $0.59 vs $0.55), so opus/low is
+not a separate rung. Haiku is one rung because it has no effort knob. There are
+no legacy-model rungs, for the reasons already given. Fable is not a worker
+rung: it runs only as `ui-designer`, by the owner's choice, and as the
+orchestrator. Markers written before 2026-09-30 use the old 9-rung numbering;
+compare an old marker by its model/effort pair, not its rung number.
 
 ## Which ledger is primary (v0.3)
 
@@ -139,7 +140,7 @@ If `.claude/autoroute/ledger.jsonl` exists, also call
   it does not write code. `locate` and `digest` are the only haiku agents.
 - `reviewer` — its failure mode is invisible, so a low escalation rate is not
   evidence of success. Absence of complaint is not evidence of correctness.
-- `deep-debug` — never below `sonnet / high`. Its `ESCALATE:` names `opus/xhigh`
+- `deep-debug` — never below `sonnet / high`. Its `ESCALATE:` names `opus/high`
   and the caller applies that as a per-call `model:` override; do not pin opus in
   its frontmatter — that would make every unknown bug pay the top price.
 - Any agent whose ledger contains a `CORRECTNESS INCIDENT` line in the current

@@ -3,7 +3,7 @@ name: implement
 description: Implements a well-specified change — the approach is already decided and what remains is writing correct code. Use for feature work, refactors with defined scope, and bug fixes where the root cause is already identified. Do not use for open-ended design or unexplained bugs.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
-effort: high
+effort: medium
 memory: project
 ---
 
@@ -26,7 +26,7 @@ searching for any of that yourself.
 
 ## Boundaries
 
-Stay inside the stated scope. If a related problem is visible but out of
+Do only what the brief asks. No unrequested tests, docs or helper files, and no extra review or verification rounds beyond the brief's done-check. Stay inside the stated scope. If a related problem is visible but out of
 scope, note it in your output rather than fixing it.
 
 ## Output
@@ -41,15 +41,14 @@ Return exactly this, as your entire response, when you cannot deliver:
 ```
 ESCALATE: <one line — what makes the spec unworkable>
 TRIED: <what you read and what you attempted>
-NEXT: <rescope | effort:<one step up> | model:<next tier>/medium — ONE rung only>
+NEXT: <rescope | effort:<one step up, max high> | model:opus/medium — ONE rung only>
 ```
 
 The rung order is cheapest-first and must not be skipped:
 1. **rescope** — a narrower or better-specified ask at your own tier.
-2. **effort up** at your current model (low → medium → high → xhigh → max).
-3. **next model** at medium effort: sonnet → opus. Haiku is never an
-   escalation target, only ever a starting rung. Never name opus before
-   sonnet's effort rungs are exhausted, and never name fable. The caller
+2. **effort up** at your current model (low → medium → high).
+3. **next model**: `model:opus/medium`. Past high, Opus 5.5 costs less per task
+   than Sonnet 5.5 and scores higher. Never name fable. The caller
    re-dispatches to exactly the rung you name; it may not jump further.
 
 Escalate when:

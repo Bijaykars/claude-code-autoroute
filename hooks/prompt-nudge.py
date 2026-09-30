@@ -16,7 +16,8 @@ PLUGIN_SUMMARY = (
     "Fable/Opus: decide, plan, judge, risky edits -> delegate everything else.\n"
     "Sonnet: also implements well-specified changes -> delegate searching/reading/boilerplate.\n"
     "locate/digest (haiku): find and read only, never write code.\n"
-    "scaffold/implement/test-writer/reviewer (sonnet): mechanical edits, implementation, tests, review.\n"
+    "scaffold/implement/test-writer (sonnet): mechanical edits, implementation, tests. reviewer (opus): review.\n"
+    "ui-designer: UI design. researcher: research.\n"
     "deep-debug (sonnet, self-escalates to opus) / retune (re-tiers agents from the ledger)."
 )
 
