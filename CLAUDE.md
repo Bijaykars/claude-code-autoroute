@@ -121,6 +121,11 @@ Every extra model in rotation also fragments the prompt cache, which is its own 
 - No interface with one implementation, no factory for one product, no config for a value that never changes.
 - Deletion over addition. Boring over clever. Fewest files. Shortest working diff wins.
 - If 200 lines could be 50, rewrite. "Would a senior engineer call this overcomplicated?" → simplify.
+- **Reuse before you write.** Before adding a function, class, component or helper, check whether the
+  codebase already has one (`locate` is cheap) and call or extend it. Never paste a second copy of
+  something that exists; if your change would duplicate a block, factor out the shared part instead.
+- A diff far larger than the problem is a defect signal: stop and look for the existing piece or the
+  simpler design before writing more.
 - Mark deliberate shortcuts: `// ponytail: <ceiling>, <upgrade path>`.
 - Complex request? Ship the lazy version and question it in the same reply. Never stall on a defaultable answer.
 - **Never simplify away:** validation at trust boundaries, error handling that prevents data loss, security,
