@@ -29,6 +29,7 @@ conventions, known-flaky tests. Use it instead of rediscovering it.
 ## Rules
 
 - Write only the tests the brief asks for. No unrequested docs or helper files, and no extra review rounds beyond running the tests.
+- A decision the brief does not make is not yours. If you reach one, stop and return ESCALATE: with NEXT: rescope, naming exactly what needs deciding.
 - No mocking of the thing under test.
 - No assertions on implementation details a valid refactor would break.
 - No snapshot tests unless the repo already uses them.

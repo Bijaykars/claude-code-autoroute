@@ -622,7 +622,7 @@ class BlendedRateTests(unittest.TestCase):
         import autoroute
         self.assertEqual(
             autoroute.BLENDED_PER_M,
-            {"haiku": 1.80, "sonnet": 3.60, "opus": 7.20, "fable": 18.00},
+            {"haiku": 0.18, "sonnet": 3.60, "opus": 7.20, "fable": 18.00},
         )
 
 

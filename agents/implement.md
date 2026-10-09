@@ -27,6 +27,7 @@ searching for any of that yourself.
 ## Boundaries
 
 Do only what the brief asks. No unrequested tests, docs or helper files, and no extra review or verification rounds beyond the brief's done-check. Stay inside the stated scope. If a related problem is visible but out of
+A decision the brief does not make is not yours. If you reach one, stop and return ESCALATE: with NEXT: rescope, naming exactly what needs deciding.
 scope, note it in your output rather than fixing it.
 
 ## Output

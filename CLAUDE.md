@@ -17,8 +17,8 @@ Read your own "You are powered by ..." line at session start and act your tier:
 
 Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
 
-- find files / symbols / call sites → `locate` (haiku)
-- long file, log, diff, test output, docs → `digest` (haiku)
+- find files / symbols / call sites → `locate` (haiku, medium)
+- long file, log, diff, test output, docs → `digest` (haiku, medium)
 - repetitive or mechanical edits, boilerplate, renames → `scaffold` (sonnet, low effort)
 - approach decided, write the code → `implement` (sonnet)
 - tests → `test-writer` (sonnet) · review before saying "done" → `reviewer` (opus, high)
@@ -38,9 +38,12 @@ Agents live in `~/.claude/agents/`; their tier is pinned in frontmatter:
   is the cheaper alternative. Sonnet keeps backend, tests and research scripts.
 - **Haiku never edits code.** The only exception is a brief that names the file, the exact old text and the exact new
   text — a find-and-replace, not a task. Anything needing a decision about the code goes to sonnet or above.
+  Haiku 5.5 does not change this: it trails Sonnet 5.5 badly on coding (Terminal-Bench 39% vs 71%).
 - **Effort is the main token lever on 5.5 models.** They think more per turn than their predecessors at
   the same effort. Never set xhigh or max without a measured quality gain. Sonnet stops at high: beyond
   it, Opus 5.5 at medium or high costs less per task and scores higher (Artificial Analysis, 2026-09).
+  Haiku 5.5 now has effort too; locate and digest pin medium so they do not inherit the session's high.
+  Keep a haiku brief under 100K prompt tokens where possible: above that Haiku 5.5 costs 5x (still half of Haiku 4.5).
 
 ### Route by difficulty
 
@@ -60,17 +63,28 @@ Rules:
 - Independent agents launch in ONE message. Never redo a delegated search yourself.
 - `ESCALATE:` is re-dispatched to the rung the agent names in `NEXT:` and no higher: rescope first,
   then effort up at the same model, then the next model (haiku → sonnet → opus) at medium effort.
-  Haiku has no effort knob, so a haiku agent skips the effort step and names sonnet/low.
+  Haiku goes medium → high, then sonnet/medium; it never runs at low (skips searches) or xhigh (can end a turn with no text).
   Findings travel with it; never retried unchanged, never jumped straight to opus/fable.
 - A delegated result that proves WRONG (test fails, root cause disproven, edit redone) gets one row in
   that agent's ledger, `.claude/agent-memory/<agent>/MEMORY.md`: `| date | task shape | WRONG | model | why |`.
   Silence reads as success, so this row is the only thing that can ever demote a bad tier.
 - Session banner says `RETUNE DUE` → launch `retune` in the background before other work. Every tier
   change is an experiment with a baseline; retune reverts it when the next window is not better.
-- Brief the hand-off completely: paths, exact change, done-check. A vague brief costs two round trips.
+- **Every hand-off is a complete brief, and the agent makes no decision the brief did not make.** Write it
+  for a worker that has never seen this conversation:
+   1. Goal in one line, and why it matters.
+   2. Exact paths, with line ranges where known.
+   3. The decided change, or the exact questions, stated as decided ("do not redesign").
+   4. Facts already verified, so nothing is re-researched.
+   5. Out of scope: files not to touch, no commit or push, no unrequested tests, docs or files.
+   6. Done-check: the commands to run and what passing looks like.
+   7. What to report back, kept compact.
+  A worker that reaches a decision the brief does not cover returns `ESCALATE:` with `NEXT: rescope`
+  instead of choosing. A vague brief costs two round trips; a guessed decision costs a revert.
 
-**Only four models are ever routed to: Haiku 4.5, Sonnet 5.5, Opus 5.5, and Fable 5.1 (`ui-designer` only).**
-Older siblings (Opus 4.6/4.7/4.8, Sonnet 4.6, Fable 5) are same-price-or-worse than the current
+**Only four models are ever routed to: Haiku 5.5, Sonnet 5.5, Opus 5.5, and Fable 5.1 (`ui-designer` only).**
+Older siblings (Opus 4.6/4.7/4.8, Sonnet 4.6, Fable 5, and Haiku 4.5, which costs 10x Haiku 5.5 with no effort
+control) are same-price-or-worse than the current
 model in their tier and strictly less capable, so nothing is ever routed to them. Fable prices
 2.5x Opus per token for an essentially equal coding/design score, so worker agents do not run on it.
 Fable is a judgment seat, not a worker tier; the one exception is `ui-designer`, which runs on Fable 5.1 by the owner's choice.

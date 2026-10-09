@@ -15,30 +15,33 @@ Every agent sits at one rung. Effort moves before model, because effort is the
 cheaper knob:
 
 ```
-1  haiku                (no effort — Haiku 4.5 does not support it)
-2  sonnet / low
-3  sonnet / medium
-4  sonnet / high
-5  opus   / medium
-6  opus   / high
-7  opus   / xhigh
-8  opus   / max
+1  haiku  / medium   (find/read agents only)
+2  haiku  / high     (find/read agents only)
+3  sonnet / low
+4  sonnet / medium
+5  sonnet / high
+6  opus   / medium
+7  opus   / high
+8  opus   / xhigh
+9  opus   / max
 ```
 
 Move **one rung per run**. Never jump two. Oscillation costs more than being
 one rung wrong for another week.
 
-Rungs are ordered by measured cost per task (Artificial Analysis, 2026-09), not
-by model name. Sonnet 5.5 xhigh and max are not rungs: Opus 5.5 at high costs
-less per task than Sonnet 5.5 at xhigh and scores higher, and Anthropic reports
-that Sonnet 5.5 at xhigh starts its own review rounds. A Sonnet agent's effort
-stops at high; its next step is opus/medium. Sonnet 5.5 at medium and Opus 5.5
-at low measure about the same (41 vs 42 points, $0.59 vs $0.55), so opus/low is
-not a separate rung. Haiku is one rung because it has no effort knob. There are
-no legacy-model rungs, for the reasons already given. Fable is not a worker
-rung: it runs only as `ui-designer`, by the owner's choice, and as the
-orchestrator. Markers written before 2026-09-30 use the old 9-rung numbering;
-compare an old marker by its model/effort pair, not its rung number.
+Rungs are ordered by measured cost per task (Artificial Analysis, 2026-10), not
+by model name. The haiku rungs serve find/read agents only (`locate`, `digest`).
+Code-writing agents keep the sonnet/low floor and never move onto a haiku rung:
+Haiku 5.5 trails Sonnet 5.5 badly on coding (Terminal-Bench 39% vs 71%), and
+Anthropic points complex coding at Sonnet and Opus. There is no haiku/low (it is
+more likely to skip a search or stop early) and no haiku/xhigh (it can end a turn
+with no visible text). Sonnet stops at high: Opus 5.5 at high costs less per task
+than Sonnet 5.5 at xhigh ($1.82 vs $2.01) and scores higher (54 vs 52), so a
+Sonnet agent's next step is opus/medium. There are no legacy-model rungs, now including Haiku 4.5, which
+costs 10x Haiku 5.5 with no effort control. Fable is not a worker rung: it runs
+only as `ui-designer`, by the owner's choice, and as the orchestrator. Markers
+written before 2026-10-09 use older numberings; compare an old marker by its
+model/effort pair, not its rung number.
 
 ## Which ledger is primary (v0.3)
 

@@ -21,6 +21,7 @@ learned the expensive way.
   match its conventions exactly: indentation, quote style, import ordering,
   naming, license header.
 - Always run the brief's done-check before reporting. Low effort is not permission to skip verification. No unrequested tests, docs or helper files.
+- A decision the brief does not make is not yours. If you reach one, stop and return ESCALATE: with NEXT: rescope, naming exactly what needs deciding.
 - Apply the specified change and nothing else. No drive-by improvements, no
   reformatting untouched lines, no "while I was in here" fixes.
 - For repetitive edits, enumerate every target site first, then apply. Report

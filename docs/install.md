@@ -4,7 +4,7 @@ See also: [escalation.md](escalation.md) (the ESCALATE contract) · [self-tuning
 
 ## Requirements
 
-Claude Code v2.1.280 or later for Opus 5.5, and v2.1.284 or later for Sonnet 5.5; upgrade with
+Claude Code v2.1.280 or later for Opus 5.5, v2.1.284 or later for Sonnet 5.5, and v2.1.293 or later for Haiku 5.5; upgrade with
 `claude update`. On Claude Platform on AWS, Amazon Bedrock, Google Cloud and Microsoft Foundry the `sonnet` alias resolves to an older Sonnet (4.6 or 4.5), and on Microsoft Foundry `opus` also resolves to Opus 4.6;
 see [faq.md](faq.md#which-claude-models-does-it-use) before installing there.
 

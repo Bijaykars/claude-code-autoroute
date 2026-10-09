@@ -23,8 +23,8 @@ import sys
 import time
 from pathlib import Path
 
-# $/M tokens at an 80/20 input/output mix, from the 2026-09-29 list prices; update when prices change.
-BLENDED_PER_M = {"haiku": 1.80, "sonnet": 3.60, "opus": 7.20, "fable": 18.00}
+# $/M tokens at an 80/20 input/output mix, from the 2026-10-09 list prices (Haiku 5.5, prompts up to 100K tokens; 5x above); update when prices change.
+BLENDED_PER_M = {"haiku": 0.18, "sonnet": 3.60, "opus": 7.20, "fable": 18.00}
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 DAY = 86400
 
